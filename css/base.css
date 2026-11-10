@@ -1,0 +1,90 @@
+/* Maze Rescue - layout + app shell. Colours and the "wood & pixel" look live in theme.css. */
+:root {
+  --font-round: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Nunito", "Varela Round", "Comic Sans MS", system-ui, sans-serif;
+  --font-pixel: "Courier New", ui-monospace, Menlo, monospace;
+  --speech-size: 21px;
+  --gap: 14px;
+  --radius: 6px;
+  --topbar-h: 58px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: var(--font-round);
+  font-size: 18px;
+  line-height: 1.35;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+[hidden] { display: none !important; }
+canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; touch-action: manipulation; }
+
+.mr-app {
+  height: 100vh; height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+/* ---------- top bar ---------- */
+.mr-topbar {
+  min-height: var(--topbar-h);
+  display: flex; align-items: center; gap: var(--gap);
+  padding: 6px 16px;
+}
+.mr-topbar__left { display: flex; align-items: baseline; gap: 14px; flex: 1 1 0; min-width: 0; }
+.mr-logo { white-space: nowrap; }
+.mr-stage { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mr-inventory { display: flex; gap: 8px; }
+.mr-slot { width: 44px; height: 44px; display: grid; place-items: center; }
+.mr-slot__icon { width: 32px; height: 32px; }
+.mr-topbar__right { display: flex; align-items: center; gap: 10px; flex: 1 1 0; justify-content: flex-end; }
+.mr-stars { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; }
+.mr-iconbtn { width: 42px; height: 42px; display: grid; place-items: center; }
+
+/* ---------- screen area ---------- */
+.mr-screen { position: relative; overflow: auto; min-height: 0; padding: 16px; }
+.mr-screen--go, .mr-screen--guide { padding: 8px 12px; }
+
+/* ---------- dialog bar ---------- */
+.mr-dialog {
+  display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: stretch;
+  padding: 10px 16px 12px;
+}
+.mr-dialog__portrait { width: 104px; height: 104px; align-self: center; display: grid; place-items: center; }
+.mr-dialog__portrait canvas { width: 96px; height: 96px; }
+.mr-dialog__main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.mr-dialog__speech { min-height: 56px; display: flex; align-items: flex-start; gap: 10px; }
+.mr-dialog__name { flex: none; }
+.mr-dialog__text { margin: 0; font-size: var(--speech-size); line-height: 1.35; min-height: 1.35em; }
+.mr-dialog__form { display: flex; gap: 8px; }
+.mr-input { flex: 1; min-width: 0; font-size: 20px; padding: 10px 14px; }
+.mr-dialog__actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* ---------- overlay ---------- */
+.mr-overlay { position: fixed; inset: 0; display: grid; place-items: center; z-index: 50; padding: 16px; }
+.mr-overlay__card { text-align: center; max-width: 440px; width: 100%; padding: 22px 26px 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.mr-overlay__pip { width: 112px; height: 112px; }
+.mr-overlay__icon { width: 64px; height: 64px; }
+.mr-overlay__title { margin: 4px 0 0; }
+.mr-overlay__text { margin: 0; font-size: 20px; }
+.mr-overlay__stars { min-height: 34px; font-size: 30px; }
+
+.mr-toast { position: fixed; left: 50%; top: 76px; transform: translateX(-50%); z-index: 60; padding: 10px 18px; }
+
+/* ---------- reusable bits ---------- */
+.mr-row { display: flex; gap: var(--gap); align-items: center; flex-wrap: wrap; }
+.mr-col { display: flex; flex-direction: column; gap: var(--gap); }
+.mr-grow { flex: 1 1 auto; min-width: 0; }
+.mr-center { display: grid; place-items: center; }
+.mr-scene-box { position: relative; display: grid; place-items: center; min-height: 0; min-width: 0; overflow: hidden; }
+.mr-scene { display: block; touch-action: manipulation; }
+.mr-visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .mr-dialog__portrait { width: 80px; height: 80px; }
+  .mr-dialog__portrait canvas { width: 72px; height: 72px; }
+  .mr-logo { display: none; }
+}

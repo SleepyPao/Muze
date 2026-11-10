@@ -1,0 +1,18 @@
+/* Guide */
+.mr-guide { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; }
+.mr-guide__side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.mr-guide__task p { margin: 4px 0; font-weight: 700; }
+.mr-guide__legend { font-size: 17px; color: var(--ink-soft); }
+.mr-guide__arrow { color: var(--sun); text-shadow: 1px 1px 0 var(--ink), -1px -1px 0 var(--ink), 1px -1px 0 var(--ink), -1px 1px 0 var(--ink); }
+.mr-guide__history { flex: 1; min-height: 120px; display: flex; flex-direction: column; overflow: hidden; }
+.mr-guide__empty { margin: 0; color: var(--ink-soft); }
+.mr-guide__list { margin: 0; padding: 0; list-style: none; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.mr-guide__item { display: flex; gap: 8px; align-items: baseline; font-size: 18px; font-weight: 700; }
+.mr-guide__mark { flex: none; width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; border: 2px solid var(--ink); font-size: 15px; font-weight: 900; }
+.mr-guide__item.is-ok .mr-guide__mark { background: #d8f5d8; }
+.mr-guide__item.is-wall .mr-guide__mark { background: #ffd9c8; }
+.mr-guide__item.is-ask .mr-guide__mark { background: #e6dcff; }
+.mr-guide__item.is-exit .mr-guide__mark { background: var(--sun); }
+.mr-guide__item.is-fail .mr-guide__mark { background: #eee; }
+.mr-guide__tools { display: flex; justify-content: flex-end; }
+@media (max-width: 1000px) { .mr-guide { grid-template-columns: 1fr; grid-template-rows: minmax(260px, 1fr) auto; } .mr-guide__history { max-height: 160px; } }

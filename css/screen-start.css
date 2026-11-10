@@ -1,0 +1,17 @@
+/* Start */
+.mr-start { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.mr-start__title { margin-top: 6px; }
+.mr-start__sub { margin: 0; font-size: 21px; font-weight: 800; color: var(--ink); background: rgba(255,247,226,0.85); padding: 4px 14px; border-radius: 8px; }
+.mr-start__picture { width: 100%; height: 230px; }
+.mr-start__form { width: min(460px, 100%); display: flex; flex-direction: column; gap: 10px; align-items: stretch; text-align: left; }
+.mr-start__label { font-weight: 900; font-size: 20px; }
+.mr-start__class::placeholder { text-transform: none; letter-spacing: 0; }
+.mr-start__class { font-size: 26px; text-align: center; letter-spacing: 2px; text-transform: uppercase; }
+.mr-start__class.is-wrong { animation: mr-shake 0.4s; border-color: var(--bad); }
+.mr-start__diff { display: flex; align-items: center; gap: 8px; }
+.mr-start__small { font-size: 16px; color: var(--ink-soft); font-weight: 700; }
+.mr-start__msg { margin: 0; min-height: 1.3em; font-weight: 700; color: var(--leaf-dark); }
+.mr-start__btns { justify-content: flex-end; }
+.mr-start__foot { position: absolute; top: 12px; right: 16px; }
+.mr-btn--small { font-size: 16px; min-height: 40px; padding: 4px 12px; border-width: 3px; box-shadow: 0 3px 0 var(--ink); }
+.mr-btn--small.is-on { background: var(--sun); }

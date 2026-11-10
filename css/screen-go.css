@@ -1,0 +1,7 @@
+/* Go */
+.mr-go { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; }
+.mr-go__scene, .mr-guide__scene { border: 3px solid var(--ink); border-radius: 10px; background: #7cc35a; box-shadow: var(--shadow); }
+.mr-go__side { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+.mr-go__help { padding: 10px 14px; }
+.mr-go__tip { margin: 0; font-weight: 800; font-size: 19px; }
+@media (max-width: 1000px) { .mr-go { grid-template-columns: 1fr; grid-template-rows: minmax(260px, 1fr) auto; } }

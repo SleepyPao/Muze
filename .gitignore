@@ -1,0 +1,13 @@
+# Local secrets - never commit
+config.local.js
+.env
+.env.*
+
+node_modules/
+shots/
+*.log
+.DS_Store
+
+# voice model files are only needed to RE-generate assets/voice (see tools/voice/README.md)
+*.onnx
+*.onnx.json

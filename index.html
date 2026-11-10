@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maze Rescue</title>
+  <!-- No build step, no CDN, no network: everything is local and works from file:// -->
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/screen-start.css">
+  <link rel="stylesheet" href="css/screen-warmup.css">
+  <link rel="stylesheet" href="css/screen-ask.css">
+  <link rel="stylesheet" href="css/screen-go.css">
+  <link rel="stylesheet" href="css/screen-sessionbreak.css">
+  <link rel="stylesheet" href="css/screen-guide.css">
+  <link rel="stylesheet" href="css/screen-review.css">
+  <link rel="stylesheet" href="css/screen-teacher.css">
+</head>
+<body>
+  <div id="mr-app" class="mr-app">
+
+    <!-- ===== top bar (js/ui.js: MR.ui.topbar) ===== -->
+    <header id="mr-topbar" class="mr-topbar">
+      <div class="mr-topbar__left">
+        <span class="mr-logo">Maze Rescue</span>
+        <span id="mr-stage" class="mr-stage"></span>
+      </div>
+      <div id="mr-inventory" class="mr-inventory" aria-label="Things for Pip"></div>
+      <div class="mr-topbar__right">
+        <span id="mr-stars" class="mr-stars" title="Stars"><span class="mr-stars__icon" aria-hidden="true">&#9733;</span><span id="mr-stars-n">0</span></span>
+        <span id="mr-classno" class="mr-chip" hidden></span>
+        <span id="mr-demo" class="mr-badge mr-badge--demo" hidden title="No AI key: Pip uses simple rules">Demo mode</span>
+        <button id="mr-mute" class="mr-iconbtn" type="button" aria-label="Sound on or off" aria-pressed="false"><span id="mr-mute-icon" aria-hidden="true">&#9834;</span></button>
+      </div>
+    </header>
+
+    <!-- ===== the current screen is mounted here (MR.go) ===== -->
+    <main id="mr-screen" class="mr-screen"></main>
+
+    <!-- ===== wooden dialog bar (js/ui.js: MR.ui.dialog) ===== -->
+    <footer id="mr-dialog" class="mr-dialog" hidden>
+      <div class="mr-dialog__portrait"><canvas id="mr-portrait" width="32" height="32" aria-label="Pip"></canvas></div>
+      <div class="mr-dialog__main">
+        <div class="mr-dialog__speech" aria-live="polite">
+          <span class="mr-dialog__name">Pip</span>
+          <p id="mr-speech" class="mr-dialog__text"></p>
+        </div>
+        <form id="mr-form" class="mr-dialog__form" autocomplete="off">
+          <input id="mr-input" class="mr-input" type="text" maxlength="200" placeholder="Type in English&hellip;" aria-label="Your sentence"
+                 autocapitalize="sentences" autocorrect="off" spellcheck="false" enterkeyhint="send">
+          <button id="mr-mic" class="mr-btn mr-btn--mic" type="button" aria-label="Speak" hidden>Speak</button>
+          <button id="mr-send" class="mr-btn mr-btn--primary" type="submit">Send</button>
+          <button id="mr-hint" class="mr-btn mr-btn--hint" type="button">Hint</button>
+        </form>
+        <div id="mr-actions" class="mr-dialog__actions" hidden></div>
+      </div>
+    </footer>
+
+    <!-- ===== "well done / next" overlay (MR.ui.overlay) ===== -->
+    <div id="mr-overlay" class="mr-overlay" hidden role="dialog" aria-modal="true">
+      <div class="mr-overlay__card">
+        <canvas id="mr-overlay-icon" class="mr-overlay__icon" width="16" height="16" hidden></canvas>
+        <canvas id="mr-overlay-pip" class="mr-overlay__pip" width="32" height="32"></canvas>
+        <h2 id="mr-overlay-title" class="mr-overlay__title"></h2>
+        <p id="mr-overlay-text" class="mr-overlay__text"></p>
+        <div id="mr-overlay-stars" class="mr-overlay__stars" aria-hidden="true"></div>
+        <button id="mr-overlay-btn" class="mr-btn mr-btn--primary mr-btn--big" type="button">Next</button>
+      </div>
+    </div>
+
+    <div id="mr-toast" class="mr-toast" hidden role="status"></div>
+  </div>
+
+  <!-- Local configuration (git-ignored, optional). A missing file is fine: the game runs in Demo mode. -->
+  <script>window.MR_CONFIG = window.MR_CONFIG || null;</script>
+  <script src="config.local.js" onerror="window.MR_CONFIG_MISSING = true"></script>
+
+  <!-- 1. pure logic (also loaded by the Node tests) -->
+  <script src="js/core.js"></script>
+  <script src="js/maze.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/guide-engine.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/log.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/voice-data.js"></script>
+  <script src="js/speech.js"></script>
+  <!-- 2. art + sound (ART engineer) -->
+  <script src="js/sprites.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/audio.js"></script>
+  <!-- 3. app shell -->
+  <script src="js/ui.js"></script>
+  <!-- 4. screens (SCREENS-1: start, warmup, ask, go, sessionbreak; SCREENS-2: guide, review, teacher) -->
+  <script src="js/screens/start.js"></script>
+  <script src="js/screens/warmup.js"></script>
+  <script src="js/screens/ask.js"></script>
+  <script src="js/screens/go.js"></script>
+  <script src="js/screens/sessionbreak.js"></script>
+  <script src="js/screens/guide.js"></script>
+  <script src="js/screens/review.js"></script>
+  <script src="js/screens/teacher.js"></script>
+  <!-- 5. boot -->
+  <script src="js/main.js"></script>
+</body>
+</html>
