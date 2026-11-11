@@ -19,7 +19,7 @@ const lmOf = (m, id) => m.landmarks.find((l) => l.id === id);
 /** Everything that defines a game, as plain data (to compare two builds). */
 function snapshot() {
   return JSON.stringify({
-    items: data.items.map((it) => [it.id, it.look, it.colour, it.place, it.template, it.junctions]),
+    items: data.items.map((it) => [it.id, it.slots, it.facts, it.colour, it.place, it.template, it.junctions]),
     maps: data.items.map((it) => { const m = data.goMap(it.id); return [m.tiles, m.landmarks, m.item, m.pickupFrom, m.start]; }),
     warm: data.warmupSet().map((q) => [q.id, q.instruction || q.sentence, q.options.map((o) => o.id || o), q.correct, q.map.tiles, q.map.landmarks]),
     guide: data.routeIds.map((r) => data.DIFFICULTIES.map((d) => data.guideMaze(r, d).id))
@@ -109,7 +109,8 @@ test('classic game (no seed) is the original fact table, word for word', () => {
     'It is opposite the windmill, in front of the big tree.',
     'It is between the big tree and the well, behind the green door.',
     'It is next to the scarecrow, opposite the bench.']);
-  assert.deepEqual(data.items.map((i) => i.look), ['It is small and yellow.', 'It is old and brown.', 'It is red and very bright.', 'It is big and green.']);
+  assert.deepEqual(data.items.map((i) => i.slots), [['name', 'colour', 'place'], ['size', 'whose', 'place'], ['why', 'when', 'place'], ['name', 'whose', 'place']]);
+  assert.deepEqual(data.items.map((i) => data.factText(i.id, i.slots[0])), ['I need a key.', 'It is big.', 'I need it to see at night.', 'I need a bag.']);
   assert.equal(data.guideMaze('r1').id, 'r1_standard');
   assert.equal(data.sessionSeed(), null);
   for (const it of data.items) checkGoMap(it, data.goMap(it.id), 'classic ' + it.id);
@@ -130,7 +131,8 @@ test(`fuzz ${SEEDS.length} seeds: 4 different things, true place sentences, dead
       assert.equal(data.getItem(k), it); assert.equal(data.getItem(it.id), it);
       assert.equal(data.factText(it.id, 'name'), 'I need ' + it.name + '.');
       assert.match(it.name, /^an? [a-z]+$/);
-      assert.equal(it.look, 'It is ' + it.size + ' and ' + it.colour + '.');
+      assert.equal(data.factText(it.id, 'colour'), 'It is ' + it.colour + '.');
+      assert.equal(data.factText(it.id, 'size'), 'It is ' + it.size + '.');
       assert.ok(data.SIZES.includes(it.size) && data.COLOURS.includes(it.colour));
       assert.match(it.place, /^It is [a-z ]+, [a-z ]+\.$/);
       assert.ok(it.place.split(' ').length <= 14, `short sentence: ${it.place}`);
@@ -167,7 +169,10 @@ test('same seed -> identical game; resume rebuilds the same content; different s
   const ev = M.log.sessionOf('5A-12');
   assert.equal(ev.seed, 99);
   assert.deepEqual(ev.items.map((i) => i.place), data.items.map((i) => i.place));
-  assert.deepEqual(ev.items[0], { id: data.items[0].id, colour: data.items[0].colour, name: 'I need ' + data.items[0].name + '.', look: data.items[0].look, place: data.items[0].place });
+  const i0 = data.items[0];
+  assert.deepEqual(ev.items[0], { id: i0.id, colour: i0.colour, name: 'I need ' + i0.name + '.', place: i0.place, slots: i0.slots,
+    facts: Object.fromEntries(i0.slots.map((f) => [f, data.factText(i0.id, f)])) });
+  assert.deepEqual(Object.keys(ev.items[0].facts).length, 3, 'the log keeps the three facts of the card');
   M.state.begin('5A-13', 'standard');                   // another pupil, another (random) game
   assert.notEqual(M.state.sessionSeed(), 99);
   M.state.begin('5A-12');                               // first pupil comes back
@@ -398,7 +403,7 @@ test(`fuzz ${SEEDS.length} seeds: the four things of one game never have colours
     assert.equal(new Set(cols).size, 4, `seed ${seed}: four different colours`);
     for (const a of cols) for (const b of cols) assert.ok(!data.coloursClash(a, b), `seed ${seed}: ${a} and ${b} in one game (${data.items.map((it) => it.colour + ' ' + it.id).join(', ')})`);
     cols.forEach((c) => used.add(c));
-    assert.equal(new Set(data.items.map((it) => it.look)).size, 4, `seed ${seed}: four different look sentences`);
+    assert.equal(new Set(data.items.map((it) => data.factText(it.id, 'colour'))).size, 4, `seed ${seed}: four different colour sentences`);
     assert.equal(new Set(data.items.map((it) => it.id)).size, 4);
     for (const it of data.items) {
       const types = data.goMap(it.id).landmarks.map((l) => l.type);
@@ -455,6 +460,79 @@ test('teacher replay rebuilds a variant route from the log alone (maze_id)', () 
   assert.deepEqual(rep.trail, run.trail);
 });
 
+/* ------------------------------------------------------------------ the questions are different from thing to thing */
+test(`fuzz ${SEEDS.length} seeds: every card = place + 2 other kinds; all six other kinds in every game; no two things with the same card`, () => {
+  fresh();
+  const EXTRA = ['name', 'colour', 'size', 'whose', 'why', 'when'];
+  assert.deepEqual(data.EXTRA_FACTS, EXTRA);
+  assert.deepEqual(data.FACTS, EXTRA.concat(['place']));
+  const pairsSeen = new Set(), firstCards = new Set(), nameCount = { 1: 0, 2: 0 };
+  const kindAt = EXTRA.map(() => new Set());           // which thing (1st..4th) gets each kind: not always the same one
+  for (const seed of SEEDS) {
+    data.useSession(seed);
+    const cards = data.items.map((it) => data.slotsOf(it));
+    const used = {};
+    cards.forEach((slots, i) => {
+      const tag = `seed ${seed} thing ${i + 1} (${slots})`;
+      assert.equal(slots.length, 3, tag);
+      assert.equal(new Set(slots).size, 3, tag + ': three different kinds');
+      assert.equal(slots[2], 'place', tag + ': place is always there (Go needs it), as the last slot');
+      assert.ok(EXTRA.includes(slots[0]) && EXTRA.includes(slots[1]), tag);
+      assert.ok(EXTRA.indexOf(slots[0]) < EXTRA.indexOf(slots[1]), tag + ': fixed card order');
+      slots.slice(0, 2).forEach((f) => { used[f] = (used[f] || 0) + 1; kindAt[EXTRA.indexOf(f)].add(i); });
+      pairsSeen.add(slots.slice(0, 2).join('+'));
+      assert.notDeepEqual(data.slotsOf(data.items[i]), null);
+      assert.equal(data.nameIsSlot(data.items[i]), slots.includes('name'));
+      // the card and the fact table agree: a sentence for every kind, and Pip gives only what is on the card
+      for (const f of data.FACTS) assert.ok(data.factText(data.items[i].id, f), tag + ' has a ' + f + ' sentence');
+    });
+    for (const f of EXTRA) assert.ok(used[f] >= 1, `seed ${seed}: "${f}" is asked for at least one thing (${JSON.stringify(cards)})`);
+    assert.equal(Object.values(used).reduce((a, b) => a + b, 0), 8, '8 slots = 6 kinds + 2 repeats');
+    assert.ok(Object.values(used).every((n) => n <= 3));
+    assert.equal(new Set(cards.map((c) => c.join('+'))).size, 4, `seed ${seed}: no two things have the same three questions (${JSON.stringify(cards)})`);
+    firstCards.add(cards[0].join('+'));
+    nameCount[used.name] = (nameCount[used.name] || 0) + 1;
+    // whose / when: one of the closed lists, different for each thing of a game
+    assert.equal(new Set(data.items.map((it) => it.owner)).size, 4);
+    assert.equal(new Set(data.items.map((it) => it.when)).size, 4);
+    for (const it of data.items) {
+      assert.ok(data.OWNERS.includes(it.owner) && data.WHENS.includes(it.when));
+      assert.equal(data.factText(it.id, 'whose'), 'It is my ' + it.owner + '’s.');
+      assert.equal(data.factText(it.id, 'when'), 'I lost it ' + it.when + '.');
+      assert.match(data.factText(it.id, 'why'), /^I need it (to|because) [a-z ]+\.$/);
+    }
+    // the session record (log / teacher view) carries the card
+    data.sessionFacts().forEach((sf, i) => {
+      assert.deepEqual(sf.slots, cards[i]);
+      assert.deepEqual(Object.keys(sf.facts), cards[i]);
+    });
+  }
+  assert.equal(pairsSeen.size, 15, 'every pair of kinds is used in some game');
+  assert.ok(firstCards.size >= 12, `the first thing has many different cards (${firstCards.size})`);
+  kindAt.forEach((set, k) => assert.equal(set.size, 4, `"${EXTRA[k]}" is not always asked for the same thing`));
+  assert.ok(nameCount[1] > 0 && nameCount[2] > 0);
+  // the same seed always gives the same cards, and the things / colours / maps of a seed did not change
+  data.useSession(7); const a = JSON.stringify(data.items.map((i) => [i.id, i.slots, i.owner, i.when]));
+  data.useSession(8); data.useSession(7);
+  assert.equal(JSON.stringify(data.items.map((i) => [i.id, i.slots, i.owner, i.when])), a);
+  data.useSession(null);
+});
+
+test('every fact sentence keeps at least one word that model-written text may never use', () => {
+  fresh();
+  const words = (t) => t.toLowerCase().replace(/[^a-z ]/g, ' ').split(/\s+/).filter(Boolean);
+  for (const t of data.allFactTexts()) {
+    assert.ok(words(t).some((w) => data.factWords.includes(w)), `"${t}" could be written with frame words only`);
+    assert.equal(MR.ai.validateReply(t.replace(/\.$/, '?'), 'unclear'), false, `model text may not say "${t}"`);
+    assert.ok(t.split(' ').length <= 14, 'short: ' + t);
+  }
+  for (const w of data.OWNERS.concat(['morning', 'yesterday', 'night', 'monday', 'week', 'today', 'gate', 'home', 'carry', 'story', 'game', 'sun', 'water', 'big', 'small'])) {
+    assert.ok(data.factWords.includes(w), w);
+    assert.equal(MR.ai.isAllowedWord(w), false, w);
+  }
+  for (const w of ['see', 'whose', 'why', 'when', 'card']) assert.equal(MR.ai.isAllowedWord(w), true, `Pip may say "${w}"`);
+});
+
 /* ------------------------------------------------------------------ words: validators + voice */
 test('validators know every thing of the pool: task words, no fact leaks in model text', () => {
   fresh();
@@ -482,6 +560,15 @@ test('every fact of every game and every warm-up instruction is in the voice lin
   }
   data.useSession(null);
   for (const it of data.items) for (const f of data.FACTS) assert.ok(lines.has(data.factText(it.id, f)), 'classic: ' + f);
+  // every sentence of every kind of fact, the clarifying question of every kind, and the "not on your card" line
+  for (const t of data.allFactTexts()) assert.ok(lines.has(t), t);
+  for (const o of data.OWNERS) assert.ok(lines.has('It is my ' + o + '’s.'), o);
+  for (const w of data.WHENS) assert.ok(lines.has('I lost it ' + w + '.'), w);
+  for (const c of data.COLOURS) assert.ok(lines.has('It is ' + c + '.'), c);
+  for (const z of data.SIZES) assert.ok(lines.has('It is ' + z + '.'), z);
+  for (const p of data.POOL) { assert.ok(lines.has(p.why), p.why); assert.ok(lines.has('I need ' + p.name + '.')); }
+  for (const f of data.FACTS.concat(['look', 'generic'])) assert.ok(lines.has(data.text.clarify[f]), 'clarify ' + f);
+  assert.ok(lines.has(data.text.offCard));
   for (const t of data.allWarmupInstructions()) assert.ok(lines.has(t), t);
   assert.ok(out.length < 400, `${out.length} lines to record`);
 });

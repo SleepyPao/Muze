@@ -9,17 +9,37 @@ window.MR_VOICE = {
   "assets/voice/0564031c9bfe.mp3",
   2.76
  ],
+ "Do you mean how big it is?": [
+  "assets/voice/f7e9a07ceba9.mp3",
+  1.78
+ ],
  "Do you mean what I need?": [
   "assets/voice/0aaa7c7a3e27.mp3",
   1.34
+ ],
+ "Do you mean what colour it is?": [
+  "assets/voice/bbff886045b0.mp3",
+  1.82
  ],
  "Do you mean what it looks like?": [
   "assets/voice/1a5331bb1616.mp3",
   1.38
  ],
+ "Do you mean when I lost it?": [
+  "assets/voice/666a87f1d346.mp3",
+  1.39
+ ],
  "Do you mean where it is?": [
   "assets/voice/0f1e1d935a3a.mp3",
   1.17
+ ],
+ "Do you mean whose it is?": [
+  "assets/voice/91799bd14ab9.mp3",
+  1.37
+ ],
+ "Do you mean why I need it?": [
+  "assets/voice/46f7edcdba08.mp3",
+  1.47
  ],
  "Done! Where next?": [
   "assets/voice/fe15604d2fac.mp3",
@@ -109,9 +129,37 @@ window.MR_VOICE = {
   "assets/voice/602c5b2f6fde.mp3",
   2.52
  ],
+ "I can’t tell you that. Look at your card.": [
+  "assets/voice/b629f9630e49.mp3",
+  2.64
+ ],
  "I got it! Thank you!": [
   "assets/voice/89476d46c21d.mp3",
   1.74
+ ],
+ "I lost it last night.": [
+  "assets/voice/5f23b3127c3f.mp3",
+  1.51
+ ],
+ "I lost it last week.": [
+  "assets/voice/4ee7106f1004.mp3",
+  1.37
+ ],
+ "I lost it on Monday.": [
+  "assets/voice/dc429094e83a.mp3",
+  1.6
+ ],
+ "I lost it this morning.": [
+  "assets/voice/c5185574e959.mp3",
+  1.54
+ ],
+ "I lost it today.": [
+  "assets/voice/603a66c2053c.mp3",
+  1.35
+ ],
+ "I lost it yesterday.": [
+  "assets/voice/8da721023505.mp3",
+  1.54
  ],
  "I need a bag.": [
   "assets/voice/aa89de1b09b3.mp3",
@@ -144,6 +192,38 @@ window.MR_VOICE = {
  "I need a map.": [
   "assets/voice/2aa594b3fb86.mp3",
   1.02
+ ],
+ "I need it because the sun is hot.": [
+  "assets/voice/c6470e24d3c8.mp3",
+  2.05
+ ],
+ "I need it to carry my things.": [
+  "assets/voice/2151db6d54ff.mp3",
+  2.04
+ ],
+ "I need it to drink water.": [
+  "assets/voice/9713fcc69193.mp3",
+  1.65
+ ],
+ "I need it to find my way home.": [
+  "assets/voice/2c003cf1f37c.mp3",
+  2.01
+ ],
+ "I need it to open the gate.": [
+  "assets/voice/742926fe0f75.mp3",
+  1.6
+ ],
+ "I need it to play a game.": [
+  "assets/voice/347c07dd8d4f.mp3",
+  1.63
+ ],
+ "I need it to read a story.": [
+  "assets/voice/6ce8fadc0755.mp3",
+  1.92
+ ],
+ "I need it to see at night.": [
+  "assets/voice/a35a8b3d1456.mp3",
+  1.7
  ],
  "I need one more thing. Ask me!": [
   "assets/voice/a0687ef997a2.mp3",
@@ -301,37 +381,53 @@ window.MR_VOICE = {
   "assets/voice/d05e83ae5adb.mp3",
   3.83
  ],
- "It is big and blue.": [
-  "assets/voice/fe30eb2e559e.mp3",
-  1.65
+ "It is big.": [
+  "assets/voice/eb8eda604a88.mp3",
+  0.98
  ],
- "It is big and brown.": [
-  "assets/voice/e15a85ddf4df.mp3",
-  1.52
+ "It is blue.": [
+  "assets/voice/45f0151a60b8.mp3",
+  1.09
  ],
- "It is big and green.": [
-  "assets/voice/626cb7982dfc.mp3",
-  1.68
+ "It is brown.": [
+  "assets/voice/adcdabc7a7ad.mp3",
+  1.15
  ],
- "It is big and orange.": [
-  "assets/voice/0244faeb4f61.mp3",
-  1.76
+ "It is green.": [
+  "assets/voice/6b09a18e4e73.mp3",
+  1.08
  ],
- "It is big and pink.": [
-  "assets/voice/be14b854147c.mp3",
-  1.36
+ "It is my brother’s.": [
+  "assets/voice/eb6a78652b44.mp3",
+  1.39
  ],
- "It is big and purple.": [
-  "assets/voice/bd343eee23fb.mp3",
-  1.46
+ "It is my dad’s.": [
+  "assets/voice/da6a5932c5e0.mp3",
+  1.39
  ],
- "It is big and red.": [
-  "assets/voice/7c8ea06805d4.mp3",
-  1.57
+ "It is my friend’s.": [
+  "assets/voice/be73c7260459.mp3",
+  1.43
  ],
- "It is big and yellow.": [
-  "assets/voice/ca15100a50f1.mp3",
-  1.67
+ "It is my grandma’s.": [
+  "assets/voice/3395fdbbb36d.mp3",
+  1.51
+ ],
+ "It is my grandpa’s.": [
+  "assets/voice/b65e661dd03c.mp3",
+  1.63
+ ],
+ "It is my mum’s.": [
+  "assets/voice/bb17da4d9ea5.mp3",
+  1.24
+ ],
+ "It is my sister’s.": [
+  "assets/voice/334d5b109b0c.mp3",
+  1.43
+ ],
+ "It is my teacher’s.": [
+  "assets/voice/6b231a6402b5.mp3",
+  1.44
  ],
  "It is next to the bench, opposite the blue fountain.": [
   "assets/voice/4d9ab2a4f46c.mp3",
@@ -372,10 +468,6 @@ window.MR_VOICE = {
  "It is next to the well, opposite the scarecrow.": [
   "assets/voice/28238cd029bf.mp3",
   2.71
- ],
- "It is old and brown.": [
-  "assets/voice/f2a86dbe73a4.mp3",
-  1.6
  ],
  "It is opposite the bench, in front of the big tree.": [
   "assets/voice/45e225e7b2bf.mp3",
@@ -461,41 +553,29 @@ window.MR_VOICE = {
   "assets/voice/34bb5ec29294.mp3",
   3.45
  ],
- "It is red and very bright.": [
-  "assets/voice/2823c49f12a1.mp3",
-  2.14
+ "It is orange.": [
+  "assets/voice/2854cc7ce501.mp3",
+  1.23
  ],
- "It is small and blue.": [
-  "assets/voice/0aa8a8ddd948.mp3",
-  1.73
+ "It is pink.": [
+  "assets/voice/493c664b4a8c.mp3",
+  0.86
  ],
- "It is small and brown.": [
-  "assets/voice/fea0ce2f165f.mp3",
-  1.72
+ "It is purple.": [
+  "assets/voice/4e24b7c2499b.mp3",
+  0.99
  ],
- "It is small and green.": [
-  "assets/voice/04d1f3f75370.mp3",
-  1.51
+ "It is red.": [
+  "assets/voice/c03846166cfc.mp3",
+  1.08
  ],
- "It is small and orange.": [
-  "assets/voice/61f4c8a35b85.mp3",
-  1.76
+ "It is small.": [
+  "assets/voice/94d4900b881d.mp3",
+  0.92
  ],
- "It is small and pink.": [
-  "assets/voice/5ea9f8d28f9c.mp3",
-  1.5
- ],
- "It is small and purple.": [
-  "assets/voice/93ad3ea6d2d6.mp3",
-  1.65
- ],
- "It is small and red.": [
-  "assets/voice/b37e849b4be1.mp3",
-  1.7
- ],
- "It is small and yellow.": [
-  "assets/voice/57f97089db15.mp3",
-  1.73
+ "It is yellow.": [
+  "assets/voice/8b1a5a5afe18.mp3",
+  1.03
  ],
  "Left or right?": [
   "assets/voice/60f446fa0dfe.mp3",

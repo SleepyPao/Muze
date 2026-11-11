@@ -54,6 +54,12 @@ async function clickTile(page, x, y) {
 async function waitHighlights(page) {
   await page.waitForFunction(() => { const sc = MR.render.active[MR.render.active.length - 1]; return sc && sc.debugState().highlights.length > 0; }, null, { timeout: 8000 });
 }
+/* One clear question for each kind of fact, and one with a small grammar error that Pip still understands. */
+const ASK_Q = { name: 'What do you need?', colour: 'What colour is it?', size: 'Is it big or small?', whose: 'Whose is it?',
+  why: 'Why do you need it?', when: 'When did you lose it?', place: 'Where is it?' };
+const ASK_ERR = { name: 'What you need?', colour: 'What colour it is?', size: 'How big it is?', whose: 'Whose it is?',
+  why: 'Why you need it?', when: 'When you lose it?', place: 'Where it is?' };
+const LABELS = { name: 'What', colour: 'Colour', size: 'Size', whose: 'Whose', why: 'Why', when: 'When', place: 'Where' };
 async function factsOn(page) { return page.$$eval('.mr-fact.is-on', (els) => els.map((e) => e.dataset.fact)); }
 const SAID_BEFORE_RELOAD = [];
 /** Record every line Pip says (to check that each fixed line has a pre-recorded clip). Again after a reload. */
@@ -139,13 +145,28 @@ async function playGame(page, classNo, difficulty, opts) {
   await page.click('#mr-warm-done');
 
   /* ---------- four things */
-  const items = await page.evaluate(() => MR.data.items.map((it) => ({ id: it.id, place: it.place, look: it.look, name: it.name })));
+  const items = await page.evaluate(() => MR.data.items.map((it) => ({ id: it.id, noun: it.noun, place: it.place, name: it.name, facts: it.facts })));
+  const cards = [];
   for (let k = 0; k < items.length; k++) {
     const it = items[k];
     await page.waitForSelector('.mr-ask');
     ok(await page.isDisabled('#mr-go-btn'), `[${it.id}] Go is locked before asking`);
     const goUrlBlocked = await page.evaluate((k) => { MR.go('go', { item: k }); return document.querySelector('.mr-ask') !== null; }, k);
     ok(goUrlBlocked, `[${it.id}] jumping to Go without facts sends the pupil back to Ask`);
+
+    /* the card of THIS thing, read from the page: three slots, each with a label that says what to find out */
+    const card = await page.$$eval('.mr-ask .mr-fact', (els) => els.map((e) => ({ fact: e.dataset.fact, label: e.querySelector('.mr-fact__label').textContent, text: e.querySelector('.mr-fact__text').textContent })));
+    const slots = card.map((c) => c.fact);
+    cards.push(slots);
+    ok(slots.length === 3 && slots[2] === 'place' && new Set(slots).size === 3 && slots.every((f) => ASK_Q[f]) &&
+      card.every((c) => c.label === LABELS[c.fact] && c.text === '? ? ?'),
+      `[${it.id}] card: ${card.map((c) => c.label).join(' / ')} - three locked slots ("? ? ?"), the labels say what to ask`);
+    const hasName = slots.includes('name');
+    if (!hasName) {
+      const shown = await page.evaluate(() => document.querySelector('.mr-screen').textContent + ' ' + document.getElementById('mr-topbar').textContent +
+        Array.from(document.querySelectorAll('.mr-slot')).map((e) => e.title).join(' '));
+      ok(!new RegExp('\\b' + it.noun + '\\b', 'i').test(shown), `[${it.id}] the name is not on this card: nothing on the Ask screen gives it away`);
+    }
 
     let s = await send(page, 'Where');
     ok(/Do you mean where it is\?/.test(s) && (await factsOn(page)).length === 0, `[${it.id}] "Where" -> clarifying question, no fact`);
@@ -154,25 +175,41 @@ async function playGame(page, classNo, difficulty, opts) {
       ok(!/behind|next to|opposite|between|in front of/.test(s) && (await factsOn(page)).length === 0, '"Where key?" (fragment) -> no fact');
       s = await send(page, 'Do you like pizza?');
       ok((await factsOn(page)).length === 0 && /ask me about the thing/i.test(s), 'off-task question -> one-sentence redirect, no fact');
+      const hints = await page.evaluate((f) => MR.data.hints[f], slots[0]);
       await page.click('#mr-hint');
-      ok(/Ask what I need/.test(await page.textContent('.mr-hintbox')), 'hint level 1 appears only after clicking Hint');
+      ok((await page.textContent('.mr-hintbox')).includes(hints[1]) && await page.$(`.mr-fact[data-fact="${slots[0]}"].is-hinted`),
+        `hint level 1 appears only after clicking Hint, about the first locked slot: "${hints[1]}"`);
       await page.click('#mr-hint');
-      ok(/What do you …\?/.test(await page.textContent('.mr-hintbox')), 'hint level 2 = sentence starter');
+      ok((await page.textContent('.mr-hintbox')).includes(hints[2]) && /…\?$/.test(hints[2]), `hint level 2 = sentence starter: "${hints[2]}"`);
+    }
+    /* a clear question about something that is NOT on this card: no fact */
+    const off = Object.keys(ASK_Q).filter((f) => !slots.includes(f));
+    for (const f of (k === 0 ? off : off.slice(0, 1))) {
+      s = await send(page, ASK_Q[f]);
+      ok(s === 'I can’t tell you that. Look at your card.' && (await factsOn(page)).length === 0, `[${it.id}] "${ASK_Q[f]}" is not on the card -> no fact`);
     }
     s = await send(page, 'Where it is?');
     ok(s === it.place && JSON.stringify(await factsOn(page)) === '["place"]', `[${it.id}] "Where it is?" -> exactly the place fact`);
-    s = await send(page, 'What do you need?');
-    ok(s === 'I need ' + it.name + '.', `[${it.id}] name fact`);
+    s = await send(page, k % 2 ? ASK_ERR[slots[0]] : ASK_Q[slots[0]]);
+    ok(s === it.facts[slots[0]] && JSON.stringify((await factsOn(page)).sort()) === JSON.stringify([slots[0], 'place'].sort()),
+      `[${it.id}] ${slots[0]} fact: "${s}" (one question, one fact)`);
     ok(await page.isDisabled('#mr-go-btn'), `[${it.id}] Go still locked with 2 of 3 facts`);
-    s = await send(page, 'What does it look like?');
-    const lookText = await page.textContent('.mr-fact[data-fact="look"] .mr-fact__text');
-    ok((s === it.look || /know it all/.test(s)) && lookText === it.look && (await factsOn(page)).length === 3, `[${it.id}] look fact; all three lit`);
-    if (k === 0) ok(await page.$('.mr-fact[data-fact="name"].is-assisted'), 'name fact marked assisted after a level-2 hint');
+    s = await send(page, k % 2 ? ASK_Q[slots[1]] : ASK_ERR[slots[1]]);
+    const shownText = await page.textContent(`.mr-fact[data-fact="${slots[1]}"] .mr-fact__text`);
+    ok((s === it.facts[slots[1]] || /know it all/.test(s)) && shownText === it.facts[slots[1]] && (await factsOn(page)).length === 3, `[${it.id}] ${slots[1]} fact: "${shownText}"; all three lit`);
+    if (k === 0) ok(await page.$(`.mr-fact[data-fact="${slots[0]}"].is-assisted`), `${slots[0]} fact marked assisted after a level-2 hint`);
     await page.waitForFunction(() => !document.getElementById('mr-go-btn').disabled);
     await page.click('#mr-go-btn');
 
     /* ---------- Go */
     await page.waitForSelector('.mr-go');
+    {
+      const go = await page.evaluate(() => ({ title: document.querySelector('.mr-go .mr-card__title').textContent, side: document.querySelector('.mr-go__side').textContent,
+        label: document.querySelector('.mr-go canvas.mr-scene').getAttribute('aria-label'), mystery: MR.render.active[MR.render.active.length - 1].debugState().item.mystery }));
+      const named = new RegExp('\\b' + it.noun + '\\b', 'i');
+      if (hasName) ok(named.test(go.title) && !go.mystery, `[${it.id}] Go: the pupil asked for the name, so the card says "${go.title}"`);
+      else ok(!named.test(go.title + go.side + go.label) && go.mystery, `[${it.id}] Go: the name was not asked - the card ("${go.title}") and the map keep it a surprise`);
+    }
     if (k === 0) { await waitHighlights(page); await checkLegend(page, 'Go map'); }
     const mz = await page.evaluate((id) => { const m = MR.data.goMap(id); return { junctions: m.junctions.map((j) => ({ branches: j.branches.map((b) => ({ path: b.path, correct: b.correct })) })) }; }, it.id);
     for (let j = 0; j < 2; j++) {
@@ -193,7 +230,17 @@ async function playGame(page, classNo, difficulty, opts) {
     }
     await page.waitForSelector('#mr-overlay:not([hidden])', { timeout: 8000 });
     ok(/You found it/.test(await page.textContent('#mr-overlay-title')), `[${it.id}] thing picked up, star given`);
+    const found = await page.textContent('#mr-overlay-text');
+    ok(found.includes(hasName ? 'Pip has ' + it.name + ' now.' : 'It is ' + it.name + '!'), `[${it.id}] pick-up: "${found}"`);
     await page.click('#mr-overlay-btn');
+  }
+
+  /* ---------- the questions were different from thing to thing */
+  {
+    const sets = cards.map((c) => c.join('+')), extra = new Set(cards.flatMap((c) => c.slice(0, 2)));
+    ok(new Set(sets).size === 4, `the four things do not have the same three questions: ${sets.join(' | ')}`);
+    ok(extra.size === 6, `this game asks for all six other kinds of fact at least once: ${Array.from(extra).join(', ')}`);
+    ok(JSON.stringify(cards) === JSON.stringify(game.facts.map((f) => f.slots)), 'the cards on the screen are the cards of this game\'s content');
   }
 
   /* ---------- end of lesson 1 */
@@ -391,7 +438,12 @@ async function playGame(page, classNo, difficulty, opts) {
   await page.waitForSelector('.mr-teach__log');
   ok(await page.$$eval('.mr-teach__details canvas', (e) => e.length) === 2, 'teacher can open a pupil: full record + 2 route replays');
   ok(/word order: Where is it\?/.test(await page.textContent('.mr-teach__notes')), 'grammar note for "Where it is?" visible to the teacher only');
+  const tThings = await page.$$eval('.mr-teach__thing', (els) => els.map((e) => ({ id: e.dataset.item, slots: e.dataset.slots, text: e.textContent })));
+  ok(tThings.length === 4 && tThings.every((t, i) => t.id === g1.facts[i].id && t.slots === g1.facts[i].slots.join(',') &&
+    g1.facts[i].slots.every((f) => t.text.includes(LABELS[f] + ': ' + g1.facts[i].facts[f]))),
+    'teacher sees this pupil\'s four things with the three questions of each card: ' + tThings.map((t) => t.id + ' [' + t.slots + ']').join(', '));
   const logText = await page.textContent('.mr-teach__log');
+  ok(/not on the card \(no fact\)/.test(logText), 'teacher record flags the questions that were not on the card');
   ok(/turn around/.test(logText) && /turn left \(pupil’s side\)/.test(logText) && /turn left \(Pip’s side\)/.test(logText) && !/turn left, turn left/.test(logText),
     'teacher record: "turn around" is one action; "my left" / "her left" are shown as the pupil\'s side / Pip\'s side');
   const walk = await page.evaluate(() => { const rep = MR.guide.replay(MR.log.forStudent('5A-12')); return { r1: rep.r1.reached, r2: rep.r2.reached, n2: rep.r2.instructions, run2: rep.r2.run.instructions }; });
@@ -402,6 +454,17 @@ async function playGame(page, classNo, difficulty, opts) {
   [dl] = await Promise.all([page.waitForEvent('download'), page.click('#mr-export-json')]);
   const json = JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
   ok(json.app === 'maze-rescue' && json.entries.length > 50 && json.entries.every((e) => e.class_no && !('player' in e) && !('audio' in e)), 'JSON export: every record has class_no, no player field, no audio');
+  {
+    const asks = json.entries.filter((e) => e.stage === 'ask' && e.event === 'turn'), KINDS = Object.keys(ASK_Q);
+    const offc = asks.filter((e) => e.off_card);
+    ok(asks.every((e) => (e.category === null || KINDS.concat(['unclear', 'off_task']).includes(e.category)) && (e.fact_given === null || KINDS.includes(e.fact_given))) &&
+      new Set(asks.map((e) => e.fact_given).filter(Boolean)).size === 7,
+      'Ask records: category / fact_given are the seven kinds of fact (all seven were given in the two games)');
+    ok(offc.length >= 8 && offc.every((e) => e.fact_given === null && e.clarification === false && KINDS.includes(e.category)),
+      `the ${offc.length} off-card questions are logged with their kind, no fact, not as a clarification`);
+    ok(asks.some((e) => /missing "did"|missing "do"|word order/.test(e.grammar_note || '') && e.fact_given && e.fact_given !== 'place'),
+      'small errors in the new kinds of question ("Whose it is?", "Why you need it?" ...) still get the fact, with a teacher-only note');
+  }
   ok(json.entries.filter((e) => e.stage === 'ask' && e.event === 'turn').every((e) => 'sent_text' in e && 'asr_text' in e && 'category' in e && 'fact_given' in e && 'hint_level' in e && 'clarification' in e && 'input_mode' in e && 'turn' in e),
     'Ask records have the spec 5.3 fields');
   const locked = await page.evaluate(() => MR.log.add({ class_no: '5A-12', stage: 'ask', item_id: MR.log.sessionOf('5A-12').items[0].id, sent_text: 'hack' }) === null);
@@ -520,6 +583,29 @@ async function playGame(page, classNo, difficulty, opts) {
     return bad;
   });
   ok(boxes.length === 0, 'the picture sizes in data.js (the "Pip is never hidden" rule) cover the real sprites' + (boxes.length ? ': ' + boxes.join(' | ') : ''));
+  /* Pip is never covered by a landmark: seed 7, route 2 - "go straight" ends just above the well */
+  await pp.goto(URL + '?fast=1&debug=guide&route=1&seed=7');
+  await pp.waitForSelector('.mr-guide');
+  await send(pp, 'go straight');
+  await pp.waitForTimeout(250);
+  const cover = await pp.evaluate(() => {
+    const sc = MR.render.active[MR.render.active.length - 1], st = sc.debugState().pip;
+    const mz = MR.data.guideMaze('r2', 'standard'), T = MR.data.TILE_PX;
+    const below = mz.landmarks.find((l) => l.x === st.x && l.y === st.y + 1);
+    const cv = document.querySelector('.mr-guide canvas.mr-scene'), PAD = cv.height - mz.rows * T;
+    const spr = MR.sprites.pip(st.facing, 0), sd = spr.getContext('2d').getImageData(0, 0, spr.width, spr.height).data;
+    const X = st.x * T, Y = PAD + st.y * T - 6;
+    const cd = cv.getContext('2d').getImageData(X, Y, spr.width, spr.height).data;
+    let solid = 0, wrong = 0, lower = 0;
+    for (let i = 0; i < sd.length; i += 4) {
+      if (sd[i + 3] < 255) continue;
+      solid++; if ((i / 4 / spr.width | 0) >= spr.height / 2) lower++;
+      if (Math.abs(sd[i] - cd[i]) + Math.abs(sd[i + 1] - cd[i + 1]) + Math.abs(sd[i + 2] - cd[i + 2]) > 6) wrong++;
+    }
+    return { below: below && below.type, would: MR.data.pipHidden(mz, st.x, st.y), solid, lower, wrong, at: st.x + ',' + st.y };
+  });
+  ok(cover.below && cover.would > 0.2, `seed 7 route 2: after "go straight" Pip stands at ${cover.at}, just above the ${cover.below} (it would hide ${Math.round(cover.would * 100)} % of him)`);
+  ok(cover.solid > 100 && cover.lower > 40 && cover.wrong === 0, `every one of Pip's ${cover.solid} pixels is on screen (${cover.wrong} covered): no landmark hides Pip`);
   await pp.goto(URL + '?fast=1&debug=teacher');
   await pp.waitForSelector('.mr-teach__table');
   const demo = await pp.evaluate(() => MR.log.classNos().map((c) => {

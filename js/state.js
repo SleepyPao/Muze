@@ -18,10 +18,13 @@
   function blank(classNo, difficulty, seed) {
     var items = {};
     MR.data.items.forEach(function (it) {
+      /* one entry per kind of fact on this thing's card (MR.data.slotsOf: 'place' + two others) */
+      var facts = {}, assisted = {}, hintLevel = {};
+      MR.data.slotsOf(it).forEach(function (f) { facts[f] = false; assisted[f] = false; hintLevel[f] = 0; });
       items[it.id] = {
-        facts: { name: false, look: false, place: false },
-        assisted: { name: false, look: false, place: false },
-        hintLevel: { name: 0, look: 0, place: 0 },
+        facts: facts,
+        assisted: assisted,
+        hintLevel: hintLevel,
         junctions: it.junctions.map(function () { return { first_choice: null, first_choice_correct: null, attempts: 0, done: false }; }),
         collected: false
       };
@@ -47,8 +50,23 @@
     };
   }
   function sessions() { return MR.storage.get(KEY_SESSIONS) || {}; }
+  /** A game saved when every card was name / look / place: give each thing the kinds its card has now.
+   *  A thing already found keeps all its facts; an old 'look' counts for colour and size. */
+  function migrate() {
+    if (!cur || !cur.items) return;
+    MR.data.items.forEach(function (it) {
+      var st = cur.items[it.id]; if (!st) return;
+      st.facts = st.facts || {}; st.assisted = st.assisted || {}; st.hintLevel = st.hintLevel || {};
+      MR.data.slotsOf(it).forEach(function (f) {
+        var look = f === 'colour' || f === 'size';
+        if (!(f in st.facts)) st.facts[f] = !!st.collected || (look && !!st.facts.look);
+        if (!(f in st.assisted)) st.assisted[f] = look && !!st.assisted.look;
+        if (!(f in st.hintLevel)) st.hintLevel[f] = 0;
+      });
+    });
+  }
   /** Switch MR.data to the content of the live session (classic content when there is none / no seed). */
-  function useContent() { MR.data.useSession(cur && cur.seed != null ? cur.seed : null, cur ? cur.difficulty : null); }
+  function useContent() { MR.data.useSession(cur && cur.seed != null ? cur.seed : null, cur ? cur.difficulty : null); migrate(); }
   function toSeed(v) {
     if (v === null || v === undefined || v === '' || isNaN(Number(v))) return null;
     return Number(v) >>> 0;
@@ -138,28 +156,36 @@
   state.itemState = itemState;
   /** Record that the pupil used hint `level` (1|2) for `fact`. Level 2 marks the fact as assisted when it is unlocked later. */
   state.useHint = function (itemId, fact, level) {
-    var s = itemState(itemId); if (!s || !(fact in s.hintLevel)) return 0;
+    var s = itemState(itemId); if (!s || MR.data.slotsOf(itemId).indexOf(fact) < 0) return 0;
+    s.hintLevel[fact] = s.hintLevel[fact] || 0;
     s.hintLevel[fact] = Math.max(s.hintLevel[fact], level);
     changed();
     return s.hintLevel[fact];
   };
-  /** The fact the next hint should be about: the first locked one in the order name, look, place (null if none). */
+  /** The fact the next hint should be about: the first locked slot of the thing's card (null if none). */
   state.nextHintFact = function (itemId) {
     var s = itemState(itemId); if (!s) return null;
-    for (var i = 0; i < MR.data.FACTS.length; i++) if (!s.facts[MR.data.FACTS[i]]) return MR.data.FACTS[i];
+    var slots = MR.data.slotsOf(itemId);
+    for (var i = 0; i < slots.length; i++) if (!s.facts[slots[i]]) return slots[i];
     return null;
   };
-  /** Unlock one fact. @returns {{isNew:boolean, assisted:boolean, hint_level:number, allUnlocked:boolean}} */
+  /** The kinds of fact already unlocked for a thing, in card order. */
+  state.givenFacts = function (itemId) {
+    var s = itemState(itemId);
+    return s ? MR.data.slotsOf(itemId).filter(function (f) { return !!s.facts[f]; }) : [];
+  };
+  /** Unlock one fact (only a kind that is on the thing's card can be unlocked). @returns {{isNew:boolean, assisted:boolean, hint_level:number, allUnlocked:boolean}} */
   state.unlockFact = function (itemId, fact) {
     var s = itemState(itemId);
-    if (!s || !(fact in s.facts)) return { isNew: false, assisted: false, hint_level: 0, allUnlocked: false };
+    if (!s || MR.data.slotsOf(itemId).indexOf(fact) < 0) return { isNew: false, assisted: false, hint_level: 0, allUnlocked: false };
     var isNew = !s.facts[fact];
     if (isNew) { s.facts[fact] = true; s.assisted[fact] = s.hintLevel[fact] >= 2; changed(); }
     return { isNew: isNew, assisted: s.assisted[fact], hint_level: s.hintLevel[fact], allUnlocked: state.allFactsUnlocked(itemId) };
   };
   state.allFactsUnlocked = function (itemId) {
     var s = itemState(itemId);
-    return !!s && s.facts.name && s.facts.look && s.facts.place;
+    var slots = MR.data.slotsOf(itemId);
+    return !!s && slots.length > 0 && slots.every(function (f) { return !!s.facts[f]; });
   };
 
   /* ---------- Go ---------- */
@@ -235,7 +261,8 @@
 
   /** Test / debug helper: build a session in a given situation without playing.
    *  opts: {class_no, difficulty, seed (the game's content; default random), warmup:boolean, items:n (collected),
-   *         facts:'all'|'none'|['name',..] for the item in progress, breakSeen:boolean, routes:n (finished), review:boolean} */
+   *         facts:'all'|'none'|n (the first n slots of its card)|['colour',..] for the item in progress,
+   *         breakSeen:boolean, routes:n (finished), review:boolean} */
   state.seed = function (opts) {
     opts = opts || {};
     state.begin(opts.class_no || 'TEST-1', opts.difficulty || 'standard', { fresh: true, seed: opts.seed });
@@ -244,14 +271,15 @@
     var n = Math.min(opts.items || 0, MR.data.items.length), i;
     for (i = 0; i < n; i++) {
       var id = MR.data.items[i].id;
-      MR.data.FACTS.forEach(function (f) { cur.items[id].facts[f] = true; });
+      MR.data.slotsOf(id).forEach(function (f) { cur.items[id].facts[f] = true; });
       cur.items[id].junctions.forEach(function (j) { j.first_choice = 0; j.first_choice_correct = true; j.attempts = 1; j.done = true; });
       cur.items[id].collected = true; cur.inventory.push(id); cur.stars++;
     }
     cur.itemIndex = n;
     if (n < MR.data.items.length && opts.facts) {
-      var list = opts.facts === 'all' ? MR.data.FACTS : (opts.facts === 'none' ? [] : opts.facts);
-      list.forEach(function (f) { if (f in cur.items[MR.data.items[n].id].facts) cur.items[MR.data.items[n].id].facts[f] = true; });
+      var slots = MR.data.slotsOf(MR.data.items[n]);
+      var list = opts.facts === 'all' ? slots : (opts.facts === 'none' ? [] : (typeof opts.facts === 'number' ? slots.slice(0, opts.facts) : opts.facts));
+      list.forEach(function (f) { if (slots.indexOf(f) >= 0) cur.items[MR.data.items[n].id].facts[f] = true; });
     }
     if (opts.breakSeen) cur.breakSeen = true;
     var r = Math.min(opts.routes || 0, MR.data.routeIds.length);

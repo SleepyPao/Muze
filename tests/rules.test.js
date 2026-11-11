@@ -6,19 +6,83 @@ const { rules, data } = MR;
 const key = data.getItem('key');
 const cat = t => rules.classifyAsk(t).category;
 
-test('Ask: spec section 8 keyword rules', () => {
-  assert.equal(cat('Where is it?'), 'place');
-  assert.equal(cat('Where can I find it?'), 'place');
+/** A thing of some game whose card has (or has not) these kinds of fact. */
+function thingWith(has, hasNot) {
+  for (let seed = 0; seed < 400; seed++) {
+    data.useSession(seed);
+    const it = data.items.find((i) => (has || []).every((f) => i.slots.includes(f)) && (hasNot || []).every((f) => !i.slots.includes(f)));
+    if (it) return it;
+  }
+  throw new Error('no thing with ' + has + ' / without ' + hasNot);
+}
+test.afterEach(() => data.useSession(null));
+
+/* every kind of fact: correct questions, questions with a small error (answered, with a teacher note), fragments */
+const TABLE = {
+  place: { ok: ['Where is it?', 'Where can I find it?', 'Where is the key?', 'Can you tell me where it is?'],
+    err: [['Where it is?', /word order/], ['Where the key is?', /word order/], ['Where are it?', /verb form/]],
+    frag: ['Where', 'where?', 'Where key?', 'Where the key?', 'the place?'], clarify: 'Do you mean where it is?' },
+  name: { ok: ['What do you need?', 'What do you want?', 'What are you looking for?', 'What is it?', 'What thing do you need?'],
+    err: [['What you need?', /missing "do"/], ['What it is?', /word order/], ['What are you need?', /verb form/]],
+    frag: ['What?', 'need', 'Which thing?'], clarify: 'Do you mean what I need?' },
+  colour: { ok: ['What colour is it?', 'What color is it?', 'Can you tell me the colour?', 'Is it red?', 'What colour is the thing?'],
+    err: [['What colour it is?', /word order/], ['What colour is?', /missing subject/], ['What is it colour?', /word order/]],
+    frag: ['colour', 'What colour?', 'The colour?', 'Color'], clarify: 'Do you mean what colour it is?' },
+  size: { ok: ['Is it big or small?', 'Is it big?', 'How big is it?', 'What size is it?', 'Is it small?'],
+    err: [['How big it is?', /word order/], ['It is big?', /word order/]],
+    frag: ['big', 'size', 'big or small?', 'How big?'], clarify: 'Do you mean how big it is?' },
+  whose: { ok: ['Whose is it?', 'Whose thing is it?', 'Who owns it?', 'Is it yours?', 'Who does it belong to?'],
+    err: [['Whose it is?', /word order/], ['Whos is it?', /spelling/], ['Who’s is it?', /spelling/], ['Whose the key is?', /word order/]],
+    frag: ['Whose', 'whose?', 'Whose key?', 'Whose thing?'], clarify: 'Do you mean whose it is?' },
+  why: { ok: ['Why do you need it?', 'Why do you want it?', 'What is it for?', 'What do you need it for?', 'Why is it important?'],
+    err: [['Why you need it?', /missing "do"/], ['Why does you need it?', /verb form/], ['Why need it?', /missing subject/]],
+    frag: ['Why', 'why?', 'Why it?', 'What for?'], clarify: 'Do you mean why I need it?' },
+  when: { ok: ['When did you lose it?', 'When was it lost?', 'What day did you lose it?', 'When did you last see it?'],
+    err: [['When you lose it?', /missing "did"/], ['When did you lost it?', /verb form/], ['When you lost it?', /missing "did"/]],
+    frag: ['When', 'when?', 'When lost?', 'When it?'], clarify: 'Do you mean when I lost it?' }
+};
+
+test('Ask: classifier table - all seven kinds of fact, correct questions', () => {
+  assert.deepEqual(Object.keys(TABLE).sort(), data.FACTS.slice().sort());
+  for (const f of data.FACTS) for (const t of TABLE[f].ok) {
+    const c = rules.classifyAsk(t);
+    assert.deepEqual([c.category, c.fragment, c.grammar_note], [f, false, ''], t);
+  }
   assert.equal(cat('What does it look like?'), 'look');
-  assert.equal(cat('What colour is it?'), 'look');
-  assert.equal(cat('What color is it?'), 'look');
-  assert.equal(cat('Is it big?'), 'look');
-  assert.equal(cat('Is it big or small?'), 'look');
-  assert.equal(cat('What do you need?'), 'name');
-  assert.equal(cat('What do you want?'), 'name');
-  assert.equal(cat('What are you looking for?'), 'name');
-  assert.equal(cat('What is it?'), 'name');
   assert.equal(cat('blah blah blah'), 'unclear');
+  assert.equal(cat('Is it behind the red door?'), 'unclear', 'a colour word in a place guess is not a colour question');
+});
+
+test('Ask: classifier table - small grammar errors are still understood, with a teacher-only note', () => {
+  for (const f of data.FACTS) for (const [t, note] of TABLE[f].err) {
+    const c = rules.classifyAsk(t);
+    assert.equal(c.category, f, t);
+    assert.equal(c.fragment, false, t);
+    assert.match(c.grammar_note, note, t);
+    // the fact is given when that kind is on the card; the note never reaches the pupil's line
+    const it = thingWith([f]);
+    const r = rules.answerAsk(it, t);
+    assert.deepEqual([r.category, r.fact_given, r.clarification, r.off_card], [f, f, false, false], t);
+    assert.equal(r.reply, data.factText(it.id, f), t);
+  }
+  assert.match(rules.classifyAsk('What it look like?').grammar_note, /missing "does"/);
+});
+
+test('Ask: classifier table - single words and fragments get the clarifying question of their kind, never a fact', () => {
+  for (const f of data.FACTS) for (const t of TABLE[f].frag) {
+    const c = rules.classifyAsk(t);
+    assert.deepEqual([c.category, c.clarify, c.fragment, c.confident], ['unclear', f, true, true], t);
+    for (const it of [thingWith([f]), f === 'place' ? thingWith(['place']) : thingWith([], [f])]) {
+      const r = rules.answerAsk(it, t);
+      assert.deepEqual([r.category, r.fact_given, r.clarification, r.off_card], ['unclear', null, true, false], t);
+      assert.equal(r.reply, TABLE[f].clarify, t);
+    }
+  }
+  assert.equal(rules.answerAsk(key, 'look').reply, 'Do you mean what it looks like?');
+  assert.equal(rules.answerAsk(key, 'banana').category, 'unclear');
+  assert.equal(rules.answerAsk(key, 'banana').reply, data.text.clarify.generic);
+  assert.equal(rules.answerAsk(key, '').category, 'unclear');
+  assert.equal(rules.answerAsk(key, '   ???  ').fact_given, null);
 });
 
 test('Ask acceptance: "Where it is?" gets the place fact, with a teacher-only grammar note', () => {
@@ -29,8 +93,6 @@ test('Ask acceptance: "Where it is?" gets the place fact, with a teacher-only gr
   assert.equal(r.clarification, false);
   assert.match(r.grammar_note, /word order/);
   assert.equal(rules.classifyAsk('Where is it?').grammar_note, '');
-  assert.match(rules.classifyAsk('What you need?').grammar_note, /missing "do"/);
-  assert.match(rules.classifyAsk('What it look like?').grammar_note, /missing "does"/);
 });
 
 test('Ask acceptance: a single word gets a clarifying question and no fact', () => {
@@ -39,42 +101,58 @@ test('Ask acceptance: a single word gets a clarifying question and no fact', () 
   assert.equal(r.reply, 'Do you mean where it is?');
   assert.equal(r.fact_given, null);
   assert.equal(r.clarification, true);
-  assert.equal(rules.answerAsk(key, 'where?').reply, 'Do you mean where it is?');
-  assert.equal(rules.answerAsk(key, 'colour').reply, 'Do you mean what it looks like?');
-  assert.equal(rules.answerAsk(key, 'What?').reply, 'Do you mean what I need?');
-  assert.equal(rules.answerAsk(key, 'banana').category, 'unclear');
-  assert.equal(rules.answerAsk(key, '').category, 'unclear');
-  assert.equal(rules.answerAsk(key, '   ???  ').fact_given, null);
-});
-
-test('Ask: fragments without a verb are unclear ("Where key?")', () => {
-  for (const t of ['Where key?', 'Where the key?', 'What colour?', 'big or small?', 'the place?']) {
-    const r = rules.answerAsk(key, t);
-    assert.equal(r.category, 'unclear', t);
-    assert.equal(r.fact_given, null, t);
-    assert.ok(r.reply.endsWith('?'), t);
-    assert.ok(rules.classifyAsk(t).fragment, t);
-  }
 });
 
 test('Ask: off-task gets a one-sentence redirect and no fact', () => {
-  for (const t of ['Do you like football?', 'How are you?', 'What is your name?', 'hello', 'Where do you live?', 'Can you sing a song?']) {
+  for (const t of ['Do you like football?', 'How are you?', 'What is your name?', 'hello', 'Where do you live?', 'Can you sing a song?', 'When do you play football?', 'Why do you like pizza?']) {
     const r = rules.answerAsk(key, t);
     assert.equal(r.category, 'off_task', t);
     assert.equal(r.fact_given, null);
+    assert.equal(r.off_card, false);
     assert.equal(r.reply.split(/[.!?]+/).filter(s => s.trim()).length, 1, 'one sentence');
     for (const w of ['key', 'yellow', 'door', 'fountain']) assert.ok(!r.reply.toLowerCase().includes(w));
   }
 });
 
-test('Ask: one question gives exactly one fact, always the canonical string', () => {
-  for (const it of data.items) {
-    assert.equal(rules.answerAsk(it, 'What do you need?').reply, 'I need ' + it.name + '.');
-    assert.equal(rules.answerAsk(it, 'What does it look like?').reply, it.look);
-    assert.equal(rules.answerAsk(it, 'Where is it?').reply, it.place);
-    const look = rules.answerAsk(it, 'What does it look like?').reply;
-    assert.ok(!look.includes(it.place) && !look.includes(it.name));
+const QUESTION = { name: 'What do you need?', colour: 'What colour is it?', size: 'Is it big or small?', whose: 'Whose is it?',
+  why: 'Why do you need it?', when: 'When did you lose it?', place: 'Where is it?' };
+
+test('Ask: one question gives exactly one fact, always the canonical string, and only a kind that is on the card', () => {
+  for (let seed = 0; seed < 60; seed++) {
+    data.useSession(seed);
+    for (const it of data.items) {
+      const all = data.FACTS.map((f) => data.factText(it.id, f));
+      for (const f of data.FACTS) {
+        const r = rules.answerAsk(it, QUESTION[f]);
+        if (it.slots.includes(f)) {
+          assert.deepEqual([r.category, r.fact_given, r.off_card, r.clarification], [f, f, false, false]);
+          assert.equal(r.reply, data.factText(it.id, f));
+          assert.equal(all.filter((t) => r.reply.includes(t)).length, 1, 'one fact only: ' + r.reply);
+        } else {
+          /* a clear question that is not on the card: no fact, one canned line, not a clarification */
+          assert.deepEqual([r.category, r.fact_given, r.off_card, r.clarification], [f, null, true, false], `seed ${seed} ${it.id} ${f}`);
+          assert.equal(r.reply, 'I can’t tell you that. Look at your card.');
+        }
+      }
+    }
   }
+});
+
+test('Ask: "What does it look like?" answers colour or size, whichever is on the card', () => {
+  const Q = 'What does it look like?';
+  let it = thingWith(['colour'], ['size']);
+  assert.deepEqual([rules.answerAsk(it, Q).fact_given, rules.answerAsk(it, Q).reply], ['colour', 'It is ' + it.colour + '.']);
+  assert.equal(rules.answerAsk(it, Q, ['colour']).fact_given, 'colour', 'asked again: the same fact again');
+  it = thingWith(['size'], ['colour']);
+  assert.deepEqual([rules.answerAsk(it, Q).fact_given, rules.answerAsk(it, Q).reply], ['size', 'It is ' + it.size + '.']);
+  it = thingWith(['colour', 'size']);
+  assert.equal(rules.answerAsk(it, Q, []).fact_given, 'colour', 'both on the card: the first locked one');
+  assert.equal(rules.answerAsk(it, Q, ['colour']).fact_given, 'size');
+  assert.equal(rules.answerAsk(it, Q, ['size']).fact_given, 'colour');
+  assert.equal(rules.answerAsk(it, Q, ['colour', 'size']).fact_given, 'colour');
+  it = thingWith([], ['colour', 'size']);
+  const r = rules.answerAsk(it, Q);
+  assert.deepEqual([r.fact_given, r.off_card, r.clarification, r.reply], [null, true, false, data.text.offCard]);
 });
 
 /* ---------------------------------------------------------------- Guide parser */

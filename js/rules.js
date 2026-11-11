@@ -8,7 +8,7 @@
   function norm(text) {
     return String(text == null ? '' : text).toLowerCase()
       .replace(/[‘’]/g, '\'')
-      .replace(/\b(where|what|how|it|that|there|who)'s\b/g, '$1 is')
+      .replace(/\b(where|what|how|it|that|there|who|when|why)'s\b/g, '$1 is')
       .replace(/\bwhats\b/g, 'what is').replace(/\bwheres\b/g, 'where is')
       .replace(/\bdon't\b/g, 'do not').replace(/\bcan't\b/g, 'can not')
       .replace(/\bi'm\b/g, 'i am').replace(/\blet's\b/g, 'let us');
@@ -17,16 +17,24 @@
   function has(tokens, list) { for (var i = 0; i < list.length; i++) if (tokens.indexOf(list[i]) >= 0) return true; return false; }
 
   /* ================================================================== ASK */
-  var VERBS = ['is', 'are', 'am', 'was', 'do', 'does', 'did', 'can', 'could', 'will', 'would', 'has', 'have',
-    'need', 'needs', 'want', 'wants', 'look', 'looks', 'find', 'tell', 'show', 'put', 'see', 'get', 'lost', 'lose', 'looking'];
+  var VERBS = ['is', 'are', 'am', 'was', 'were', 'do', 'does', 'did', 'can', 'could', 'will', 'would', 'has', 'have',
+    'need', 'needs', 'want', 'wants', 'look', 'looks', 'find', 'tell', 'show', 'put', 'see', 'get', 'lost', 'lose', 'looking',
+    'belong', 'belongs', 'owns'];
   var OFF_TASK = /\b(your name|how old|you live|your (house|home|school|mum|dad|family|friend|teacher)|do you like|favou?rite|football|basketball|homework|weather|joke|sing|dance|play|game|games|tv|pizza|food|eat|who are you|how are you|hello|hi|hey|bye|goodbye|good (morning|afternoon)|i love you|robot|stupid|silly|poo)\b/;
   /* words that show the sentence is about the task: every thing Pip may need in any game (the whole pool) */
   var TASK_HINT = new RegExp('\\b(it|need|want|thing|looking for|' + MR.data.POOL.map(function (p) { return p.noun; }).join('|') + ')\\b');
+  var COLOUR_GUESS = new RegExp('\\b(?:is|it is) (?:it|that|this|the \\w+)? ?(?:' + MR.data.COLOURS.join('|') + ')\\b');
+  var SIZE_WORDS = ['big', 'small', 'size', 'large', 'little', 'tiny', 'huge'];
+  /** The seven kinds of fact (+ 'look' = "What does it look like?", which composeAsk turns into colour or size). */
+  function isFactCat(c) { return c === 'look' || MR.data.FACTS.indexOf(c) >= 0; }
+  rules.isFactCategory = isFactCat;
 
   /**
-   * Classify one pupil sentence in the Ask stage.
-   * @returns {{category:'name'|'look'|'place'|'unclear'|'off_task', clarify:('name'|'look'|'place'|'generic'|null),
-   *            grammar_note:string, fragment:boolean, confident:boolean}}
+   * Classify one pupil sentence in the Ask stage. It does not know which thing is asked about: composeAsk decides
+   * whether that kind of fact is on the thing's card.
+   * @returns {{category:('name'|'colour'|'size'|'whose'|'why'|'when'|'place'|'look'|'unclear'|'off_task'),
+   *            clarify:(same fact kinds|'generic'|null), grammar_note:string, fragment:boolean, confident:boolean}}
+   *   'look'    = "What does it look like?" (colour or size: composeAsk picks the one on the card)
    *   fragment  = a single word or a verb-less fragment (must be answered with a clarifying question, never a fact)
    *   confident = the rules are sure enough that ai.js lets this result override the model
    */
@@ -37,49 +45,72 @@
     }
     if (n === 0) return out('unclear', 'generic', '', true, true);
 
+    var lookingFor = /\blook(ing)? for\b/.test(t);
     var isWhere = has(w, ['where', 'place']);
-    var isLook = has(w, ['look', 'looks', 'colour', 'color', 'colours', 'colors', 'big', 'small', 'size', 'shape']) && !/\blook(ing)? for\b/.test(t);
+    var isWhose = has(w, ['whose', 'whos']) || /^who is is\b/.test(t) || /\bwho (owns|has got)\b/.test(t) || /\bbelongs? to\b/.test(t) ||
+      /\bis (it|that|this) (your|yours|my|mine)\b/.test(t);
+    var isWhy = has(w, ['why']) || /\bwhat (is|was) (it|that|this) for\b/.test(t) || /\bwhat (do|does|did)? ?you (need|want) (it|that|this) for\b/.test(t) ||
+      /^what for\b/.test(t);
+    var isWhen = has(w, ['when']) || /\bwhat (time|day)\b/.test(t);
+    /* "Is it red?" asks about the colour; "Is it behind the red door?" does not */
+    var isColour = has(w, ['colour', 'color', 'colours', 'colors']) || COLOUR_GUESS.test(t);
+    var isSize = has(w, SIZE_WORDS);
+    var isLook = has(w, ['look', 'looks', 'shape']) && !lookingFor;
     var isWhat = has(w, ['what', 'which']);
-    var isName = (isWhat && (has(w, ['need', 'needs', 'want', 'wants', 'thing', 'things', 'find', 'lost', 'missing']) || /\blook(ing)? for\b/.test(t))) ||
-      /^what is it\b/.test(t) || /^what is (that|this)\b/.test(t) ||
-      (has(w, ['you']) && has(w, ['need', 'want']) && !isWhere && !isLook);
+    var other = isWhere || isWhose || isWhy || isWhen || isColour || isSize || isLook;
+    var isName = !isWhy && ((isWhat && (has(w, ['need', 'needs', 'want', 'wants', 'thing', 'things', 'find', 'lost', 'missing']) || lookingFor)) ||
+      /^what is it\b/.test(t) || /^what it is\b/.test(t) || /^what is (that|this)\b/.test(t) ||
+      (has(w, ['you']) && has(w, ['need', 'want']) && !other));
 
     /* one word, e.g. "Where" -> clarifying question, never a fact */
     if (n === 1) {
       if (isWhere) return out('unclear', 'place', 'single word', true, true);
+      if (isWhose) return out('unclear', 'whose', 'single word', true, true);
+      if (isWhy) return out('unclear', 'why', 'single word', true, true);
+      if (isWhen) return out('unclear', 'when', 'single word', true, true);
+      if (isColour) return out('unclear', 'colour', 'single word', true, true);
+      if (isSize) return out('unclear', 'size', 'single word', true, true);
       if (isLook) return out('unclear', 'look', 'single word', true, true);
       if (w[0] === 'what' || w[0] === 'which' || w[0] === 'need' || w[0] === 'want') return out('unclear', 'name', 'single word', true, true);
       if (OFF_TASK.test(t)) return out('off_task', null, '', false, true);
       return out('unclear', 'generic', 'single word', true, true);
     }
 
+    /* one question = one fact: the first kind in this order wins */
+    var category = isWhere ? 'place' : (isWhose ? 'whose' : (isWhy ? 'why' : (isWhen ? 'when' :
+      (isColour ? 'colour' : (isSize ? 'size' : (isLook ? 'look' : (isName ? 'name' : null)))))));
+
     var offTask = OFF_TASK.test(t);
-    if (offTask && !(TASK_HINT.test(t) && (isWhere || isLook || isName))) return out('off_task', null, '', false, false);
+    if (offTask && !(TASK_HINT.test(t) && category)) return out('off_task', null, '', false, false);
     if (offTask && /\b(you live|your (house|home|school|name))\b/.test(t)) return out('off_task', null, '', false, false);
 
     var hasVerb = has(w, VERBS);
-    var category = isWhere ? 'place' : (isLook ? 'look' : (isName ? 'name' : null));
     if (!category) return out('unclear', 'generic', '', false, false);
 
-    /* fragment such as "Where key?", "What colour?", "Where the key?" -> clarify, give no fact */
+    /* fragment such as "Where key?", "What colour?", "Whose key?", "Why?" -> clarify, give no fact */
     if (!hasVerb || n < 3) return out('unclear', category, 'fragment: no verb', true, true);
 
     return out(category, null, grammarNote(t, category), false, true);
   };
 
+  /** Teacher-only note about the form of an understood question ('' = nothing to note). */
   function grammarNote(t, category) {
+    var bare = t.replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
     if (category === 'place') {
       if (/\bwhere (it|the \w+|my \w+) is\b/.test(t) && !/\b(tell|know|show|say)\b/.test(t)) return 'word order: Where is it?';
-      if (/\bwhere is\s*$/.test(t.replace(/[^a-z ]/g, ''))) return 'missing subject: Where is it?';
+      if (/\bwhere is$/.test(bare)) return 'missing subject: Where is it?';
       if (/\bwhere (are|was) (it|the)\b/.test(t)) return 'verb form: Where is it?';
       if (/\bwhere (i|you|we) (can )?find\b/.test(t)) return 'word order: Where can I find it?';
     }
-    if (category === 'look') {
+    if (category === 'look' || category === 'colour' || category === 'size') {
       if (/\bwhat (it|the \w+) looks? like\b/.test(t)) return 'missing "does": What does it look like?';
       if (/\bwhat does it looks\b/.test(t)) return 'verb form: What does it look like?';
       if (/\bhow does it looks? like\b/.test(t)) return 'question word: What does it look like?';
       if (/\bwhat colou?r (it|the \w+) is\b/.test(t)) return 'word order: What colour is it?';
-      if (/\bit is (big|small)\b/.test(t)) return 'word order: Is it big?';
+      if (/\bwhat colou?r is$/.test(bare)) return 'missing subject: What colour is it?';
+      if (/\bwhat is it colou?r\b/.test(t)) return 'word order: What colour is it?';
+      if (/\bhow big (it|the \w+) is\b/.test(t)) return 'word order: How big is it?';
+      if (/^it is (big|small)\b/.test(bare)) return 'word order: Is it big or small?';
     }
     if (category === 'name') {
       if (/\b(what|which thing) you (need|want)\b/.test(t)) return 'missing "do": What do you need?';
@@ -87,26 +118,60 @@
       if (/\bwhat it is\b/.test(t)) return 'word order: What is it?';
       if (/\bwhat are you (need|want)\b/.test(t)) return 'verb form: What do you need?';
     }
+    if (category === 'whose') {
+      if (/\bwhose (it|this|that|the \w+) is\b/.test(t)) return 'word order: Whose is it?';
+      if (/\bwhos\b/.test(t) || /^who is is\b/.test(t)) return 'spelling: Whose is it?';
+      if (/\bwhose is$/.test(bare)) return 'missing subject: Whose is it?';
+      if (/\bwhose (are|was) (it|the)\b/.test(t)) return 'verb form: Whose is it?';
+    }
+    if (category === 'why') {
+      if (/\bwhy you (need|want)\b/.test(t)) return 'missing "do": Why do you need it?';
+      if (/\bwhy (does|are|is) you\b/.test(t)) return 'verb form: Why do you need it?';
+      if (/\bwhy do you (needs|wants)\b/.test(t)) return 'verb form: Why do you need it?';
+      if (/\bwhy (need|want)\b/.test(t)) return 'missing subject: Why do you need it?';
+      if (/\bwhat it is for\b/.test(t)) return 'word order: What is it for?';
+    }
+    if (category === 'when') {
+      if (/\bwhen you (lose|lost)\b/.test(t)) return 'missing "did": When did you lose it?';
+      if (/\bwhen did you lost\b/.test(t)) return 'verb form: When did you lose it?';
+      if (/\bwhen (do|does|are|is) you (lose|lost)\b/.test(t)) return 'verb form: When did you lose it?';
+      if (/\bwhen (it|the \w+) (was|is) lost\b/.test(t)) return 'word order: When was it lost?';
+    }
     return '';
   }
   rules.grammarNote = grammarNote;
 
   /**
-   * Turn a classification into the final Ask result. Facts are ALWAYS the canonical strings from the fact table.
+   * Turn a classification into the final Ask result. Facts are ALWAYS the canonical strings from the fact table, and
+   * only the three kinds on the thing's card (MR.data.slotsOf) can be given:
+   *   - a kind on the card            -> its fact
+   *   - 'look'                        -> colour or size, whichever is on the card (both: the first one still locked)
+   *   - a clear question about a kind that is NOT on the card -> no fact, "I can't tell you that. Look at your card."
+   *     (off_card:true; not a clarification)
    * @param {object} item     an entry of MR.data.items
    * @param {object} cls      {category, clarify?, grammar_note?}
    * @param {string} [text]   model-written text for unclear / off_task (already validated by the caller)
-   * @returns {{category, reply, grammar_note, fact_given:(string|null), clarification:boolean}}
+   * @param {string[]} [given] the kinds already unlocked for this thing (only used for 'look')
+   * @returns {{category, reply, grammar_note, fact_given:(string|null), clarification:boolean, off_card:boolean}}
    */
-  rules.composeAsk = function (item, cls, text) {
-    var T = MR.data.text, c = cls.category, reply, fact = null;
-    if (c === 'name' || c === 'look' || c === 'place') { reply = MR.data.factText(item.id, c); fact = c; }
+  rules.composeAsk = function (item, cls, text, given) {
+    var T = MR.data.text, c = cls.category, reply, fact = null, offCard = false;
+    var slots = MR.data.slotsOf(item);
+    if (c === 'look') {
+      var cand = ['colour', 'size'].filter(function (f) { return slots.indexOf(f) >= 0; });
+      var locked = cand.filter(function (f) { return (given || []).indexOf(f) < 0; });
+      c = locked[0] || cand[0] || 'colour';
+    }
+    if (MR.data.FACTS.indexOf(c) >= 0) {
+      if (slots.indexOf(c) >= 0) { reply = MR.data.factText(item.id, c); fact = c; }
+      else { reply = T.offCard; offCard = true; }
+    }
     else if (c === 'off_task') reply = text || T.redirect;
     else { c = 'unclear'; reply = text || T.clarify[cls.clarify || 'generic'] || T.clarify.generic; }
-    return { category: c, reply: reply, grammar_note: cls.grammar_note || '', fact_given: fact, clarification: c === 'unclear' };
+    return { category: c, reply: reply, grammar_note: cls.grammar_note || '', fact_given: fact, clarification: c === 'unclear', off_card: offCard };
   };
-  /** Offline answer in one call: classifyAsk + composeAsk. */
-  rules.answerAsk = function (item, text) { return rules.composeAsk(item, rules.classifyAsk(text)); };
+  /** Offline answer in one call: classifyAsk + composeAsk. `given` = kinds already unlocked (see composeAsk). */
+  rules.answerAsk = function (item, text, given) { return rules.composeAsk(item, rules.classifyAsk(text), null, given); };
 
   /* ================================================================== GUIDE */
   var NUM = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };

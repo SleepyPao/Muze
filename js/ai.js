@@ -54,23 +54,29 @@
   ai.ASK_SYSTEM = [
     'You are Pip, a friendly little explorer who is lost in a hedge maze. You are talking to a 10 to 12 year old learner of English (level A2).',
     'The pupil asks you questions about ONE thing that you need. Decide what kind of question it is and reply with one json object and nothing else.',
+    'You only classify the question. The game itself gives the fact, and only if that kind of fact is on the pupil\'s card ("card").',
     '',
     'Categories:',
-    '- "name": the pupil asks what you need, want or are looking for.',
-    '- "look": the pupil asks what the thing looks like (colour, size, shape).',
-    '- "place": the pupil asks where the thing is.',
-    '- "unclear": you cannot tell which of these the pupil means (one word only, a fragment with no verb such as "Where key?", or a muddled sentence).',
+    '- "name": the pupil asks what you need, want or are looking for ("What do you need?", "What is it?").',
+    '- "colour": the pupil asks about its colour ("What colour is it?", "Is it red?").',
+    '- "size": the pupil asks how big it is ("Is it big or small?", "How big is it?").',
+    '- "look": the pupil asks what it looks like in general ("What does it look like?").',
+    '- "whose": the pupil asks who it belongs to ("Whose is it?", "Is it yours?").',
+    '- "why": the pupil asks why you need it or what it is for ("Why do you need it?", "What is it for?").',
+    '- "when": the pupil asks when you lost it ("When did you lose it?").',
+    '- "place": the pupil asks where the thing is ("Where is it?").',
+    '- "unclear": you cannot tell which of these the pupil means (one word only, a fragment with no verb such as "Where key?" or "Whose key?", or a muddled sentence).',
     '- "off_task": the message is not about the maze or the thing you need.',
     '',
     'Rules:',
-    '- Use only the facts you are given. Answer only the ONE fact that was asked, never two. Never add things, places or routes.',
+    '- Choose ONE category, never two. Never add things, places, people or routes.',
     '- "reply" has at most two short sentences and uses simple words.',
-    '- If you can understand the question, answer it even when the grammar is wrong (for example "Where it is?" is "place"). Never correct the pupil\'s grammar.',
+    '- If you can understand the question, classify it even when the grammar is wrong (for example "Where it is?" is "place", "Whose it is?" is "whose", "Why you need it?" is "why", "When you lose it?" is "when"). Never correct the pupil\'s grammar.',
     '- "grammar_note" is a short note for the teacher only, for example "word order: Where is it?". Use "" when the question is correct. The pupil never sees it.',
     '- If you cannot understand, ask ONE short clarifying question. Do not guess.',
     '- Never give a model question and never make a sentence for the pupil to copy.',
     '- If the message is off task, bring the pupil back to the task in ONE sentence.',
-    '- For "name", "look" and "place" the reply is the given fact sentence, word for word. For "unclear" and "off_task" the reply must not mention any fact, thing, colour or place.',
+    '- For a fact category the reply is the given fact sentence, word for word, or "" when you were not given it. For "unclear" and "off_task" the reply must not mention any fact, thing, colour, person, time or place.',
     '',
     'Output example (json):',
     '{"category": "place", "reply": "It is behind the red door, next to the blue fountain.", "grammar_note": "word order: Where is it?"}'
@@ -101,13 +107,14 @@
   ].join('\n');
 
   /* ------------------------------------------------------------------ validator for model-written text */
-  var ALLOWED = ('a about again am an and are ask asking back be but can cannot cant colour color could did do does done dont ' +
+  var ALLOWED = ('a about again am an and are ask asking back be but can cannot cant card colour color could did do does done dont ' +
     'far find first for forward full get go going have hello help here hi how i im in is it its just know left let lets like ' +
     'look looks lost many maze me mean mine more must my name need no not now of ok one only or out place please question ' +
     'right say see sentence should size so something sorry step steps stop straight sure talk task tell that the then there ' +
-    'thing things think this to too try turn understand until us wall want way we what where which will with word words yes you your yours')
+    'thing things think this to too try turn understand until us wall want way we what when where which whose why will with word words yes you your yours')
     .split(' ').reduce(function (m, w) { m[w] = true; return m; }, {});
-  /* safety net: no word that could give away a fact of ANY game (all 8 things, all looks, all places) is ever allowed */
+  /* safety net: no word that could give away a fact of ANY game (all 8 things, colours, sizes, owners, reasons, times,
+   * places) is ever allowed (MR.data.factWords) */
   (MR.data.factWords || []).forEach(function (w) { delete ALLOWED[w]; });
   ai.isAllowedWord = function (w) { return !!ALLOWED[String(w).toLowerCase()]; };
   ai.MAX_REPLY_CHARS = 120;
@@ -189,11 +196,17 @@
   }
 
   /* ------------------------------------------------------------------ Ask */
+  /** The only categories the model may answer with: the seven kinds of fact, "look" (colour or size) and the two non-facts. */
+  ai.ASK_CATEGORIES = MR.data.FACTS.concat(['look', 'unclear', 'off_task']);
   /**
    * @param {{item:object|string, given?:string[], text:string}} req   item = entry of MR.data.items (or its id);
    *        given = facts already unlocked for this item; text = what the pupil sent
-   * @returns {Promise<{category:('name'|'look'|'place'|'unclear'|'off_task'|null), reply:string, grammar_note:string,
-   *        fact_given:('name'|'look'|'place'|null), clarification:boolean, failed:boolean, source:('rules'|'ai'|'ai+rules')}>}
+   * @returns {Promise<{category:(one of MR.data.FACTS|'unclear'|'off_task'|null), reply:string, grammar_note:string,
+   *        fact_given:(one of MR.data.FACTS|null), clarification:boolean, off_card:boolean, failed:boolean,
+   *        source:('rules'|'ai'|'ai+rules')}>}
+   *   Only the three kinds of fact on the thing's card (MR.data.slotsOf) are ever given; a clear question about
+   *   another kind gets "I can't tell you that. Look at your card." (off_card:true, no fact).
+   *   The model may also say "look" ("What does it look like?"): composeAsk turns it into colour or size.
    *   failed:true  => show reply ("Sorry, can you say that again?"), do NOT count it against the pupil.
    *   Never rejects.
    */
@@ -202,24 +215,28 @@
     var text = String(req.text == null ? '' : req.text).slice(0, 300);
     var cls = MR.rules.classifyAsk(text);
     function viaRules() {
-      var r = MR.rules.composeAsk(item, cls); r.failed = false; r.source = 'rules'; return r;
+      var r = MR.rules.composeAsk(item, cls, null, req.given); r.failed = false; r.source = 'rules'; return r;
     }
     if (ai.isOffline() || cls.fragment) return Promise.resolve(viaRules());
 
-    var facts = { name: MR.data.factText(item.id, 'name'), look: MR.data.factText(item.id, 'look'), place: MR.data.factText(item.id, 'place') };
-    return callModel(ai.ASK_SYSTEM, { facts: facts, already_given: req.given || [], pupil_sentence: text }).then(function (obj) {
-      var cats = ['name', 'look', 'place', 'unclear', 'off_task'];
+    /* the closed fact table of this thing: only the three kinds on its card */
+    var card = MR.data.slotsOf(item), facts = {};
+    card.forEach(function (f) { facts[f] = MR.data.factText(item.id, f); });
+    return callModel(ai.ASK_SYSTEM, { card: card, facts: facts, already_given: req.given || [], pupil_sentence: text }).then(function (obj) {
+      var cats = ai.ASK_CATEGORIES;
       if (!obj || cats.indexOf(obj.category) < 0) {
         if (fail()) return viaRules();                       /* second failure in a row: offline rules take over */
         return failedResult({ category: null, grammar_note: '', fact_given: null, clarification: false });
       }
       ok();
       var category = obj.category, source = 'ai';
-      var isFact = function (c) { return c === 'name' || c === 'look' || c === 'place'; };
+      var isFact = MR.rules.isFactCategory;
       if (!isFact(category) && isFact(cls.category) && cls.confident) { category = cls.category; source = 'ai+rules'; }
+      /* "What does it look like?" is colour or size, whichever is on the card: the rules know this form for sure */
+      else if (cls.category === 'look' && cls.confident && (category === 'colour' || category === 'size')) { category = 'look'; source = 'ai+rules'; }
       var note = typeof obj.grammar_note === 'string' ? obj.grammar_note.trim().slice(0, 120) : '';
       var modelText = !isFact(category) && ai.validateReply(obj.reply, category) ? obj.reply.trim() : null;
-      var r = MR.rules.composeAsk(item, { category: category, clarify: cls.clarify, grammar_note: note || cls.grammar_note }, modelText);
+      var r = MR.rules.composeAsk(item, { category: category, clarify: cls.clarify, grammar_note: note || cls.grammar_note }, modelText, req.given);
       r.failed = false; r.source = source;
       return r;
     });

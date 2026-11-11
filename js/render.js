@@ -181,7 +181,8 @@
 
     var start = map.start || { x: 0, y: 0, facing: 'S' };
     var pip = { x: start.x, y: start.y, facing: start.facing || 'S', walking: false, frame: 0, hidden: !map.start, bumpT: 0 };
-    var item = opts.item ? { id: opts.item.id, x: opts.item.x, y: opts.item.y, visible: true, pop: 0 } : null;
+    /* mystery:true = the pupil was not asked for the thing's name: it is a "?" parcel until Pip picks it up */
+    var item = opts.item ? { id: opts.item.id, x: opts.item.x, y: opts.item.y, visible: true, pop: 0, mystery: !!opts.item.mystery } : null;
     var trail = [], highlights = [], markers = [], particles = [], emote = null, pings = [], labels = [];
     var clickFn = null, lmClickFn = null, alive = true, raf = 0, scale = 1, t0 = performance.now(), now = 0;
     var fast = function () { return !!(MR.flags && MR.flags.fast); };
@@ -282,7 +283,8 @@
 
     /* ---------------- drawing */
     function drawEntitySprite(spr, tx, ty) { g.drawImage(spr.canvas, Math.round(tx * T + spr.ox), Math.round(PAD + ty * T + spr.oy)); }
-    function drawPipSprite() {
+    /* shadow:false = Pip only (the second pass that keeps Pip in front of a landmark, see frame()) */
+    function drawPipSprite(shadow) {
       if (pip.hidden) return;
       var frame = pip.walking ? (Math.floor(now / 140) % 2) + 1 : 0;
       var bx = 0, by = 0;
@@ -292,8 +294,27 @@
       }
       var X = Math.round(pip.x * T + bx), Y = Math.round(PAD + pip.y * T + by - 6);
       /* shadow */
-      g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(X + 3, Y + 18, 10, 2); g.fillRect(X + 4, Y + 17, 8, 4);
+      if (shadow !== false) { g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(X + 3, Y + 18, 10, 2); g.fillRect(X + 4, Y + 17, 8, 4); }
       g.drawImage(S.pip(pip.facing, frame), X, Y - (pip.walking && frame === 1 ? 1 : 0));
+    }
+    /* Pip is never covered by a landmark. Rows are drawn top to bottom, so a landmark (or the gate) on a LOWER row
+     * is drawn after Pip and its top could hide his legs (e.g. the well just below the end of a corridor). Pip is
+     * drawn once more, only inside the picture box of each such landmark (MR.data.SPRITE_BOX), so hedges still hide
+     * his feet as before. */
+    function drawPipInFront(pipRow) {
+      if (pip.hidden) return;
+      var boxes = MR.data.SPRITE_BOX, list = (map.landmarks || []).slice();
+      if (opts.showExit !== false && map.exit) list.push({ type: 'exit', x: map.exit.x, y: map.exit.y });
+      list.forEach(function (lm) {
+        var B = boxes[lm.type];
+        if (!B || lm.type === 'bridge' || lm.y <= pipRow || lm.y - pipRow > 2 || Math.abs(lm.x - pip.x) > 2) return;
+        g.save();
+        g.beginPath();
+        g.rect(lm.x * T + B[0], PAD + lm.y * T + B[1], B[2] - B[0] + 1, B[3] - B[1] + 1);
+        g.clip();
+        drawPipSprite(false);
+        g.restore();
+      });
     }
     /* The yellow chevron that shows where Pip is looking. It sits on the side Pip faces and its TIP points the
      * same way (facing E: a ">" to the right of Pip). Rows / columns run from the wide end (near Pip) to the tip. */
@@ -326,7 +347,13 @@
       g.fillStyle = 'rgba(255,240,140,' + (pulse + item.pop * 0.4) + ')';
       g.beginPath(); g.ellipse(X + 8, Y + 9, 9 + item.pop * 6, 6 + item.pop * 4, 0, 0, Math.PI * 2); g.fill();
       g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(X + 4, Y + 13, 8, 2);
-      g.drawImage(S.item(item.id), X, Y - 2 + bob);
+      if (!item.mystery) { g.drawImage(S.item(item.id), X, Y - 2 + bob); return; }
+      /* a small parcel with a "?" on it */
+      var py = Y - 1 + bob;
+      px(g, X + 2, py + 2, 12, 12, '#3a2830'); px(g, X + 3, py + 3, 10, 10, '#f3d9a4'); px(g, X + 3, py + 11, 10, 2, '#d9b77c');
+      [[6, 4, 4, 1], [5, 5, 2, 1], [9, 5, 2, 1], [9, 6, 2, 1], [8, 7, 2, 1], [7, 8, 2, 1], [7, 10, 2, 2]].forEach(function (r) {
+        px(g, X + r[0], py + r[1], r[2], r[3], '#b0452f');
+      });
     }
     function drawTrail() {
       for (var i = 0; i < trail.length; i++) {
@@ -440,12 +467,17 @@
         if (hedges[y]) g.drawImage(hedges[y], 0, PAD + y * T - HEDGE_LIFT);
         (map.landmarks || []).forEach(function (lm) {
           if (lm.y !== y) return;
+          /* a landmark right in front of Pip (the tile below him) would cover him: draw it see-through */
+          var covers = !pip.hidden && lm.y === pipRow + 1 && Math.abs(lm.x - pip.x) < 0.6 && lm.type !== 'bridge';
+          if (covers) g.globalAlpha = 0.4;
           drawEntitySprite(S.landmark(lm.type, lf, corridorOrient(map, lm.x, lm.y)), lm.x, lm.y);
+          g.globalAlpha = 1;
         });
         if (opts.showExit !== false && map.exit && map.exit.y === y) drawEntitySprite(S.landmark('exit', lf), map.exit.x, map.exit.y);
         if (item && item.y === y) drawItem();
         if (pipRow === y) drawPipSprite();
       }
+      drawPipInFront(pipRow);       /* no landmark ever covers Pip */
       drawFacingArrow();            /* after every row, so no hedge or landmark can hide where Pip is looking */
       drawPings();
       drawMarkers();
@@ -529,6 +561,7 @@
         return queue(function () {
           if (!item) return Promise.resolve();
           if (MR.audio) MR.audio.sfx('pickup');
+          item.mystery = false;                 /* now the pupil sees what it is */
           sc.burst(item.x, item.y, 18);
           return tween(650, function (k) { item.pop = Math.sin(k * Math.PI / 2); }).then(function () {
             return tween(250, function () {});
@@ -574,7 +607,7 @@
       /** For tests / debugging: what is on screen now. */
       debugState: function () {
         return { pip: { x: pip.x, y: pip.y, facing: pip.facing, walking: pip.walking }, highlights: highlights.map(function (h) { return { id: h.id, tiles: h.tiles }; }),
-          markers: markers.length, item: item ? { visible: item.visible } : null, trail: trail.length, emote: emote && emote.kind,
+          markers: markers.length, item: item ? { visible: item.visible, mystery: item.mystery } : null, trail: trail.length, emote: emote && emote.kind,
           pings: pings.map(function (p) { return { x: p.x, y: p.y }; }), labels: labels.map(function (l) { return { x: l.x, y: l.y, text: l.el.textContent }; }),
           /* the facing chevron in base pixels (tests): tip = its point, centre = its middle, pipCentre = the middle of Pip's tile */
           arrow: opts.facingArrow && !pip.hidden ? (function () { var a = facingArrowPoints(); return { tip: a.tip, centre: a.centre, pipCentre: [pip.x * T + 8, PAD + pip.y * T + 8] }; })() : null };

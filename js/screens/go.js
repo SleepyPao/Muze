@@ -18,13 +18,16 @@
       ui.topbar.setStage('Find it · thing ' + (idx + 1) + ' of 4');
 
       var box = el('div', { class: 'mr-scene-box mr-go__scene' });
-      var card = MR.askKit.factCard(item, { compact: true, title: 'Pip needs ' + item.name });
+      /* the thing's name is only shown when the pupil asked for it; otherwise it is a surprise until Pip picks it up */
+      var named = MR.data.nameIsSlot(item);
+      var card = MR.askKit.factCard(item, { compact: true, title: named ? 'Pip needs ' + item.name : 'Thing ' + (idx + 1) + ': what Pip told me' });
       var tip = el('p', { class: 'mr-go__tip', text: 'Click a path to show Pip the way.' });
       var side = el('div', { class: 'mr-go__side' }, [card.el, el('div', { class: 'mr-card mr-go__help' }, [tip])]);
       rootEl.appendChild(el('div', { class: 'mr-go' }, [box, side]));
       card.focus('place');
 
-      scene = MR.render.createScene(box, mz, { item: { id: item.id, x: mz.item.x, y: mz.item.y }, showExit: false, label: 'Maze for ' + item.name });
+      scene = MR.render.createScene(box, mz, { item: { id: item.id, x: mz.item.x, y: mz.item.y, mystery: !named }, showExit: false,
+        label: named ? 'Maze for ' + item.name : 'Maze for thing ' + (idx + 1) });
       var sc = scene;
       /* the legend: the name of every landmark on this map (the words in the place sentence); tap = it blinks on the map */
       side.insertBefore(MR.legend.create(mz, sc, { compact: true }), side.lastChild);
@@ -97,7 +100,7 @@
           var left = MR.data.items.length - MR.state.get().inventory.length;
           return ui.overlay.show({
             title: 'You found it!', itemId: item.id, stars: 1,
-            text: 'Pip has ' + item.name + ' now. ' + (left ? left + ' more to find!' : 'That is all four!'),
+            text: (named ? 'Pip has ' + item.name + ' now. ' : 'It is ' + item.name + '! ') + (left ? left + ' more to find!' : 'That is all four!'),
             button: left ? 'Next thing' : 'Next'
           });
         }).then(function () { if (live()) MR.next(); });

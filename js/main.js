@@ -6,7 +6,8 @@
  *   ?debug=<screen>         jump straight to a screen with a seeded pupil, in volatile memory storage
  *                           (start | warmup | ask | go | sessionbreak | guide | review | teacher)
  *     &item=0..3            ask / go: which thing (default 0)
- *     &facts=name,look      ask: facts already unlocked (default none)
+ *     &facts=colour,place   ask: kinds of fact already unlocked, if they are on the thing's card (default none);
+ *                           &facts=2 = the first 2 slots of the card, &facts=all = all three
  *     &route=0|1            guide: which route (default 0)
  *     &difficulty=simple    guide / any: maze difficulty
  *     &seed=123             any: the game's content (things, maps, warm-up, maze variants); default random
@@ -35,10 +36,22 @@
     var good = quality !== 'weak';
     MR.state.seed({ class_no: classNo, warmup: true, difficulty: 'standard', seed: seed != null ? seed : MR.data.seedFromText(classNo) });
     MR.log.event('warmup', 'summary', { correct: good ? 9 : 6, total: 10 });
-    var asks = good ? ['What do you need?', 'What does it look like?', 'Where it is?'] : ['Where', 'Where is it?', 'what you need', 'What colour is it?'];
+    /* a good and a weak way to ask for each kind of fact; each thing is asked about the three kinds on ITS card */
+    var Q = good
+      ? { name: 'What do you need?', colour: 'What colour is it?', size: 'Is it big or small?', whose: 'Whose is it?',
+        why: 'Why do you need it?', when: 'When did you lose it?', place: 'Where it is?' }
+      : { name: 'what you need', colour: 'What colour it is?', size: 'How big is it?', whose: 'Whose it is?',
+        why: 'Why you need it?', when: 'When you lose it?', place: 'Where is it?' };
     MR.data.items.forEach(function (it, i) {
+      var slots = MR.data.slotsOf(it);
+      var asks = slots.map(function (f) { return Q[f]; });
+      if (!good) {
+        asks.unshift('Where');                                              /* one word: Pip asks back */
+        var off = MR.data.FACTS.filter(function (f) { return slots.indexOf(f) < 0; })[i % 4];
+        if (i % 2 === 0) asks.splice(2, 0, Q[off]);                         /* a question that is not on the card: no fact */
+      }
       asks.forEach(function (text, k) {
-        var r = MR.rules.answerAsk(it, text);
+        var r = MR.rules.answerAsk(it, text, MR.state.givenFacts(it.id));
         var hint = !good && k === 1 && i % 2 === 0 ? 2 : 0;
         if (hint) { MR.state.useHint(it.id, 'place', 2); MR.log.hint({ stage: 'ask', item_id: it.id, hint_level: 2, hint_fact: 'place' }); }
         var u = r.fact_given ? MR.state.unlockFact(it.id, r.fact_given) : { assisted: false };
@@ -111,7 +124,8 @@
       case 'start': return MR.go('start');
       case 'warmup': MR.state.seed({ class_no: base.class_no, difficulty: diff, seed: seed }); return MR.go('warmup');
       case 'ask': {
-        var f = q.get('facts'); base.items = item; base.facts = f ? f.split(',') : 'none';
+        var f = q.get('facts'); base.items = item;
+        base.facts = !f ? 'none' : (f === 'all' ? 'all' : (/^\d$/.test(f) ? Number(f) : f.split(',')));
         MR.state.seed(base); return MR.go('ask', { item: item });
       }
       case 'go': base.items = item; base.facts = 'all'; MR.state.seed(base); return MR.go('go', { item: item });

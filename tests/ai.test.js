@@ -41,9 +41,9 @@ test('mode: direct with a key, proxy with a proxyUrl, offline when forced', () =
 test('request: DeepSeek chat shape, json mode, prompts mention json; no class number is sent', async () => {
   const MR = fresh();
   MR.state.begin('5A-12');
-  const it = MR.data.items[0];                      // this game's first thing (each game has its own things)
-  const calls = online(MR, ['{"category":"look","reply":"It is huge and purple.","grammar_note":""}']);
-  const r = await MR.ai.ask({ item: it.id, given: ['name'], text: 'Can you tell me about its colour?' });
+  const it = MR.data.items.find((i) => i.slots.includes('colour'));   // a thing whose card asks for the colour
+  const calls = online(MR, ['{"category":"colour","reply":"It is huge and purple.","grammar_note":""}']);
+  const r = await MR.ai.ask({ item: it.id, given: [], text: 'Can you tell me about its colour?' });
   assert.equal(calls.length, 1);
   const c = calls[0];
   assert.equal(c.url, 'https://api.deepseek.com/chat/completions');
@@ -56,11 +56,17 @@ test('request: DeepSeek chat shape, json mode, prompts mention json; no class nu
   assert.match(MR.ai.GUIDE_SYSTEM, /json/);
   assert.ok(!c.init.body.includes('5A-12'), 'class number never leaves the device');
   const user = JSON.parse(c.body.messages[1].content);
-  assert.deepEqual(Object.keys(user).sort(), ['already_given', 'facts', 'pupil_sentence']);
+  assert.deepEqual(Object.keys(user).sort(), ['already_given', 'card', 'facts', 'pupil_sentence']);
   // the model's own fact text is thrown away: the canonical fact is shown
-  assert.equal(r.reply, it.look);
-  assert.deepEqual(user.facts, { name: 'I need ' + it.name + '.', look: it.look, place: it.place });
-  assert.deepEqual([r.category, r.fact_given, r.failed, r.source], ['look', 'look', false, 'ai']);
+  assert.equal(r.reply, 'It is ' + it.colour + '.');
+  // only the three kinds of fact on this thing's card are sent
+  assert.deepEqual(user.card, it.slots);
+  assert.deepEqual(Object.keys(user.facts), it.slots);
+  for (const f of it.slots) assert.equal(user.facts[f], MR.data.factText(it.id, f));
+  assert.deepEqual([r.category, r.fact_given, r.failed, r.source], ['colour', 'colour', false, 'ai']);
+  // the prompt names all seven kinds of fact, and the whitelist is closed
+  for (const f of MR.data.FACTS) assert.ok(MR.ai.ASK_SYSTEM.includes('"' + f + '"'), f);
+  assert.deepEqual(MR.ai.ASK_CATEGORIES.slice().sort(), MR.data.FACTS.concat(['look', 'unclear', 'off_task']).sort());
 });
 
 test('proxy mode posts to proxyUrl without a key', async () => {
@@ -106,13 +112,17 @@ test('model-written clarifications are validated; leaks and out-of-table things 
   assert.ok(!V('I can’t see a house. Try the fountain!', 'guide', 'go to the house'));
 
   online(MR, ['{"category":"unclear","reply":"Do you mean the yellow key behind the red door?","grammar_note":""}',
-    '{"category":"off_task","reply":"Let us find my thing first.","grammar_note":""}']);
+    '{"category":"off_task","reply":"Let us talk about my thing first.","grammar_note":""}']);
   let r = await MR.ai.ask({ item: 'key', text: 'Tell me things about stuff' });
   assert.equal(r.category, 'unclear');
   assert.equal(r.reply, MR.data.text.clarify.generic);
   assert.equal(r.fact_given, null);
   r = await MR.ai.ask({ item: 'key', text: 'My dog can swim very fast' });
-  assert.equal(r.reply, 'Let us find my thing first.', 'a clean model line is kept');
+  assert.equal(r.reply, 'Let us talk about my thing first.', 'a clean model line is kept');
+  // words of the new kinds of fact cannot leak either: owners, reasons, times
+  for (const t of ['Is it for your grandma?', 'Do you need it to see at night?', 'Did you mean this morning?', 'Do you mean the big one?']) {
+    assert.ok(!V(t, 'unclear'), t);
+  }
 });
 
 test('acceptance: empty / invalid / failed output -> "say that again", second failure in a row -> offline rules', async () => {
@@ -223,4 +233,37 @@ test('speech: feature detection is safe without browser APIs', async () => {
   assert.equal(MR.speech.canSpeak(), false);
   assert.equal(MR.speech.listen({}), null);
   await MR.speech.speak('Hello');
+});
+
+test('the model only classifies: a kind that is not on the card gives no fact; "look" becomes colour or size; unknown categories fail', async () => {
+  const MR = fresh();
+  MR.state.begin('5A-12', 'standard', { seed: 7 });
+  const D = MR.data;
+  for (const it of D.items) {
+    const off = D.FACTS.filter((f) => !it.slots.includes(f));
+    online(MR, off.map((f) => JSON.stringify({ category: f, reply: D.factText(it.id, f), grammar_note: '' })));
+    for (const f of off) {
+      // the model even tries to give the fact itself: it is thrown away
+      const r = await MR.ai.ask({ item: it.id, given: [], text: 'Please tell me more about that thing of yours' });
+      assert.deepEqual([r.category, r.fact_given, r.off_card, r.clarification, r.failed], [f, null, true, false, false], it.id + ' ' + f);
+      assert.equal(r.reply, D.text.offCard);
+    }
+    online(MR, it.slots.map((f) => JSON.stringify({ category: f, reply: 'It is a huge castle.', grammar_note: '' })));
+    for (const f of it.slots) {
+      const r = await MR.ai.ask({ item: it.id, given: [], text: 'Please tell me more about that thing of yours' });
+      assert.deepEqual([r.category, r.fact_given, r.off_card, r.reply], [f, f, false, D.factText(it.id, f)]);
+    }
+  }
+  // "What does it look like?": the rules know this form; the model's "colour" does not hide a size slot
+  const sized = (() => { for (let s = 0; s < 300; s++) { D.useSession(s); const i = D.items.find((x) => x.slots.includes('size') && !x.slots.includes('colour')); if (i) return i; } })();
+  online(MR, ['{"category":"colour","reply":"","grammar_note":""}', '{"category":"look","reply":"","grammar_note":""}']);
+  let r = await MR.ai.ask({ item: sized, given: [], text: 'What does it look like?' });
+  assert.deepEqual([r.category, r.fact_given, r.reply], ['size', 'size', 'It is ' + sized.size + '.']);
+  r = await MR.ai.ask({ item: sized, given: [], text: 'Tell me about how the thing looks to you' });
+  assert.deepEqual([r.category, r.fact_given], ['size', 'size']);
+  // a category outside the whitelist is a failed call, not a fact
+  online(MR, ['{"category":"owner","reply":"It is my mum’s.","grammar_note":""}']);
+  r = await MR.ai.ask({ item: sized, given: [], text: 'Please tell me more about that thing of yours' });
+  assert.deepEqual([r.failed, r.fact_given], [true, null]);
+  D.useSession(null);
 });

@@ -174,8 +174,27 @@
   };
 
   /* ------------------------------------------------------------------ the things Pip may need (closed pool) */
-  data.FACTS = ['name', 'look', 'place'];
+  /** The seven kinds of fact Pip can give about a thing. A thing's card has THREE of them: 'place' always (the Go
+   *  stage needs it) + two of the other six, chosen by the game's seed (data.slotsOf). So the pupil has to ask
+   *  different questions for different things.
+   *    name   What do you need?        -> "I need a key."
+   *    colour What colour is it?       -> "It is yellow."
+   *    size   Is it big or small?      -> "It is small."
+   *    whose  Whose is it?             -> "It is my grandma’s."
+   *    why    Why do you need it?      -> "I need it to see at night."
+   *    when   When did you lose it?    -> "I lost it this morning."
+   *    place  Where is it?             -> "It is behind the red door, next to the well."
+   *  (Logs written before this had 'look' = size + colour in one sentence; MR.log still counts those.) */
+  data.FACTS = ['name', 'colour', 'size', 'whose', 'why', 'when', 'place'];
+  data.EXTRA_FACTS = ['name', 'colour', 'size', 'whose', 'why', 'when'];   /* a card has two of these + 'place' */
+  data.SLOTS_PER_ITEM = 3;
+  /** What the card calls each kind of fact: it tells the pupil what to find out. */
+  data.FACT_LABELS = { name: 'What', colour: 'Colour', size: 'Size', whose: 'Whose', why: 'Why', when: 'When', place: 'Where' };
   data.ITEM_COUNT = 4;
+  /** Whose thing it is: "It is my mum’s." */
+  data.OWNERS = ['mum', 'dad', 'sister', 'brother', 'grandma', 'grandpa', 'friend', 'teacher'];
+  /** When Pip lost it: "I lost it this morning." */
+  data.WHENS = ['this morning', 'today', 'yesterday', 'last night', 'on Monday', 'last week'];
   data.SIZES = ['small', 'big'];
   data.COLOURS = ['red', 'blue', 'green', 'yellow', 'brown', 'pink', 'purple', 'orange'];
   /** Colours a child could mix up on a small picture. One game never uses both colours of a pair, so
@@ -196,14 +215,14 @@
   }
   /** Eight common things that are easy to draw. Each game uses four of them. `colour` = the colour when no game is on. */
   data.POOL = [
-    { id: 'key',  noun: 'key',  name: 'a key',  sizes: ['small'],        colour: 'yellow' },
-    { id: 'map',  noun: 'map',  name: 'a map',  sizes: ['small', 'big'], colour: 'brown' },
-    { id: 'lamp', noun: 'lamp', name: 'a lamp', sizes: ['small', 'big'], colour: 'red' },
-    { id: 'bag',  noun: 'bag',  name: 'a bag',  sizes: ['small', 'big'], colour: 'green' },
-    { id: 'book', noun: 'book', name: 'a book', sizes: ['small', 'big'], colour: 'blue' },
-    { id: 'ball', noun: 'ball', name: 'a ball', sizes: ['small', 'big'], colour: 'orange' },
-    { id: 'hat',  noun: 'hat',  name: 'a hat',  sizes: ['small', 'big'], colour: 'purple' },
-    { id: 'cup',  noun: 'cup',  name: 'a cup',  sizes: ['small', 'big'], colour: 'pink' }
+    { id: 'key',  noun: 'key',  name: 'a key',  sizes: ['small'],        colour: 'yellow', why: 'I need it to open the gate.' },
+    { id: 'map',  noun: 'map',  name: 'a map',  sizes: ['small', 'big'], colour: 'brown',  why: 'I need it to find my way home.' },
+    { id: 'lamp', noun: 'lamp', name: 'a lamp', sizes: ['small', 'big'], colour: 'red',    why: 'I need it to see at night.' },
+    { id: 'bag',  noun: 'bag',  name: 'a bag',  sizes: ['small', 'big'], colour: 'green',  why: 'I need it to carry my things.' },
+    { id: 'book', noun: 'book', name: 'a book', sizes: ['small', 'big'], colour: 'blue',   why: 'I need it to read a story.' },
+    { id: 'ball', noun: 'ball', name: 'a ball', sizes: ['small', 'big'], colour: 'orange', why: 'I need it to play a game.' },
+    { id: 'hat',  noun: 'hat',  name: 'a hat',  sizes: ['small', 'big'], colour: 'purple', why: 'I need it because the sun is hot.' },
+    { id: 'cup',  noun: 'cup',  name: 'a cup',  sizes: ['small', 'big'], colour: 'pink',   why: 'I need it to drink water.' }
   ];
   data.POOL.forEach(function (p) { p.colours = data.COLOURS; });
   data.poolIds = data.POOL.map(function (p) { return p.id; });
@@ -211,7 +230,31 @@
     for (var i = 0; i < data.POOL.length; i++) if (data.POOL[i].id === id) return data.POOL[i];
     return null;
   }
-  function lookText(size, colour) { return 'It is ' + size + ' and ' + colour + '.'; }
+  /* The ONE sentence for each kind of fact (every possible sentence is listed by data.allFactTexts for the voice). */
+  function nameText(p) { return 'I need ' + p.name + '.'; }
+  function colourText(colour) { return 'It is ' + colour + '.'; }
+  function sizeText(size) { return 'It is ' + size + '.'; }
+  function whoseText(owner) { return 'It is my ' + owner + '’s.'; }
+  function whenText(when) { return 'I lost it ' + when + '.'; }
+  /** Card order of fact kinds: data.FACTS order, so 'place' is always the last slot. */
+  function sortSlots(list) {
+    return list.slice().sort(function (a, b) { return data.FACTS.indexOf(a) - data.FACTS.indexOf(b); });
+  }
+  /**
+   * The two extra fact kinds (besides 'place') of each of the four things of a game: 8 slots = all six kinds at
+   * least once + two repeats, never the same pair on two things, in a random thing order.
+   * @returns {string[][]} four pairs, each sorted in data.FACTS order
+   */
+  function pickSlotPairs(r) {
+    var six = r.shuffle(data.EXTRA_FACTS);
+    var pairs = [[six[0], six[1]], [six[2], six[3]], [six[4], six[5]]].map(sortSlots);
+    var all = [];
+    for (var i = 0; i < 6; i++) for (var j = i + 1; j < 6; j++) all.push([data.EXTRA_FACTS[i], data.EXTRA_FACTS[j]]);
+    var free = all.filter(function (p) { return !pairs.some(function (q) { return q[0] === p[0] && q[1] === p[1]; }); });
+    pairs.push(r.pick(free));
+    return r.shuffle(pairs);
+  }
+  data.pickSlotPairs = pickSlotPairs;
 
   /* ------------------------------------------------------------------ Go map templates
    * Four hand-made map shapes. Each has 2 junctions. A branch has landmark SLOTS:
@@ -378,14 +421,20 @@
   }
 
   /** Build one thing + its Go map from a template.
-   *  look: {size, colour, look}; choice: {doors, solids, win}. Returns {item, map}. */
+   *  look: {size, colour, owner, when, extra:[two fact kinds]}; choice: {doors, solids, win}. Returns {item, map}. */
   function buildThing(p, look, tpl, choice) {
     var types = assignTypes(tpl, choice), win = choice.win;
     var correct = [tpl.j[0].correct, win];
+    var place = placeText(tpl, types, win);
     var item = {
       id: p.id, noun: p.noun, name: p.name,
-      size: look.size, colour: look.colour, look: look.look,
-      place: placeText(tpl, types, win),
+      size: look.size, colour: look.colour, owner: look.owner, when: look.when,
+      /* the three kinds of fact on this thing's card (what the pupil has to ask), 'place' last */
+      slots: sortSlots(look.extra.concat(['place'])),
+      /* the closed fact table of this thing: one canonical sentence per kind */
+      facts: { name: nameText(p), colour: colourText(look.colour), size: sizeText(look.size), whose: whoseText(look.owner),
+        why: p.why, when: whenText(look.when), place: place },
+      place: place,
       template: tpl.id,
       junctions: tpl.j.map(function (J, ji) {
         return { clue: clause(J.prep, types[ji][correct[ji]]), options: types[ji].map(branchLabel), correct: correct[ji] };
@@ -429,19 +478,19 @@
    * Used for a game saved before games were random (it has no seed) and as the default before a game starts.
    * These are the original four things, word for word. */
   var CLASSIC = [
-    { id: 'key', tpl: 'A', size: 'small', colour: 'yellow', look: 'It is small and yellow.',
+    { id: 'key', tpl: 'A', size: 'small', colour: 'yellow', owner: 'grandpa', when: 'this morning', extra: ['name', 'colour'],
       choice: { doors: ['red_door', 'green_door'], solids: ['fountain', 'tree'], win: 0 } },
-    { id: 'map', tpl: 'B', size: 'big', colour: 'brown', look: 'It is old and brown.',
+    { id: 'map', tpl: 'B', size: 'big', colour: 'brown', owner: 'teacher', when: 'yesterday', extra: ['size', 'whose'],
       choice: { doors: [], solids: ['windmill', 'scarecrow', 'tree', 'well', 'bench'], win: 0 } },
-    { id: 'lamp', tpl: 'C', size: 'small', colour: 'red', look: 'It is red and very bright.',
+    { id: 'lamp', tpl: 'C', size: 'small', colour: 'red', owner: 'grandma', when: 'last night', extra: ['why', 'when'],
       choice: { doors: ['green_door', 'red_door'], solids: ['tree', 'well', 'scarecrow', 'windmill'], win: 0 } },
-    { id: 'bag', tpl: 'D', size: 'big', colour: 'green', look: 'It is big and green.',
+    { id: 'bag', tpl: 'D', size: 'big', colour: 'green', owner: 'mum', when: 'on Monday', extra: ['name', 'whose'],
       choice: { doors: [], solids: ['scarecrow', 'tree', 'bench', 'fountain'], win: 0 } }
   ];
   function classicContent() {
     var items = [], goMaps = {};
     CLASSIC.forEach(function (c) {
-      var b = buildThing(poolItem(c.id), { size: c.size, colour: c.colour, look: c.look }, TEMPLATES[c.tpl], c.choice);
+      var b = buildThing(poolItem(c.id), c, TEMPLATES[c.tpl], c.choice);
       items.push(b.item); goMaps[c.id] = b.map;
     });
     return { seed: null, items: items, goMaps: goMaps, guide: null, warmup: null };
@@ -755,9 +804,13 @@
   /* ------------------------------------------------------------------ hint ladder (spec 4.2.7) */
   /** Level 1 = general pointer; level 2 = sentence starter (using level 2 marks that fact `assisted`). */
   data.hints = {
-    name:  { 1: 'Ask what I need.',          2: 'What do you …?' },
-    look:  { 1: 'Ask what it looks like.',   2: 'What does it …?' },
-    place: { 1: 'Ask about the place.',      2: 'Where is …?' }
+    name:   { 1: 'Ask what I need.',        2: 'What do you …?' },
+    colour: { 1: 'Ask about the colour.',   2: 'What colour …?' },
+    size:   { 1: 'Ask about the size.',     2: 'Is it big or …?' },
+    whose:  { 1: 'Ask whose thing it is.',  2: 'Whose …?' },
+    why:    { 1: 'Ask why I need it.',      2: 'Why do you …?' },
+    when:   { 1: 'Ask when I lost it.',     2: 'When did you …?' },
+    place:  { 1: 'Ask about the place.',    2: 'Where is …?' }
   };
   /* Guide hints are not fixed sentences: js/guide-hint.js works them out from where Pip is now. */
 
@@ -769,10 +822,17 @@
     sayAgain: 'Sorry, can you say that again?',
     clarify: {
       place: 'Do you mean where it is?',
-      look: 'Do you mean what it looks like?',
       name: 'Do you mean what I need?',
+      colour: 'Do you mean what colour it is?',
+      size: 'Do you mean how big it is?',
+      whose: 'Do you mean whose it is?',
+      why: 'Do you mean why I need it?',
+      when: 'Do you mean when I lost it?',
+      look: 'Do you mean what it looks like?',
       generic: 'Sorry, I don’t understand. What do you want to know?'
     },
+    /* a clear question about something that is NOT on this thing's card: no fact */
+    offCard: 'I can’t tell you that. Look at your card.',
     redirect: 'I am lost, so please ask me about the thing I need.',
     goIntro: 'Which way? Click a path.',
     deadEnd: 'Dead end. Go back and ask Pip again.',
@@ -801,6 +861,8 @@
   /* ================================================================== the game's own content (per seed)
    * Every new game gets a random seed (MR.state.begin). The seed decides, always in the same way:
    *   - which 4 of the 8 things Pip needs, in which order, and how each one looks (size + colour)
+   *   - which THREE kinds of fact are on each thing's card ('place' + two others: pickSlotPairs), whose it is and
+   *     when Pip lost it
    *   - which Go map shape each thing gets, which landmark stands where, and which last branch hides the thing
    *   - the 10 warm-up questions (kinds, order and landmarks)
    *   - for each Guide route: mirrored or not, and which solid landmark stands where
@@ -819,11 +881,15 @@
     var picks = r.shuffle(data.POOL).slice(0, data.ITEM_COUNT);
     var shapes = r.shuffle(data.TEMPLATE_IDS);
     var colours = distinctColours(r.shuffle(data.COLOURS), data.ITEM_COUNT);   /* four colours nobody can mix up */
+    /* The questions of this game come from their own random numbers, so the things, colours and maps of a seed are
+     * the same as before the cards had different questions (a saved game keeps its content). */
+    var r2 = data.rng((seed ^ 0x51ED270B) >>> 0);
+    var pairs = pickSlotPairs(r2), owners = r2.shuffle(data.OWNERS), whens = r2.shuffle(data.WHENS);
     var items = [], goMaps = {};
     picks.forEach(function (p, i) {
       var colour = colours[i], size = r.pick(p.sizes), tpl = TEMPLATES[shapes[i]];
       var choice = { doors: r.shuffle(data.DOOR_TYPES), solids: fitSolids(solidSpots(tpl), r.shuffle(data.SOLID_TYPES)), win: r.pick(winnable(tpl)) };
-      var b = buildThing(p, { size: size, colour: colour, look: lookText(size, colour) }, tpl, choice);
+      var b = buildThing(p, { size: size, colour: colour, owner: owners[i], when: whens[i], extra: pairs[i] }, tpl, choice);
       items.push(b.item); goMaps[p.id] = b.map;
     });
     var guide = {};
@@ -861,28 +927,39 @@
   data.sessionSeed = function () { return current ? current.seed : null; };
 
   /** Item in this game (by index 0..3 or id); an id of any of the 8 things also works (the teacher view shows
-   *  pupils who had other things) - those come without look / place. */
+   *  pupils who had other things) - those come without facts / slots. */
   data.getItem = function (idOrIndex) {
     if (typeof idOrIndex === 'number') return data.items[idOrIndex] || null;
     for (var i = 0; i < data.items.length; i++) if (data.items[i].id === idOrIndex) return data.items[i];
     return poolItem(idOrIndex);
   };
-  /** The ONLY text Pip may use to give a fact. fact: 'name' | 'look' | 'place'. */
+  /** The ONLY text Pip may use to give a fact. fact: one of data.FACTS. */
   data.factText = function (itemId, fact) {
     var it = data.getItem(itemId);
     if (!it) return '';
-    if (fact === 'name') return 'I need ' + it.name + '.';
-    return it[fact] || '';
+    if (it.facts) return it.facts[fact] || '';
+    return fact === 'name' ? nameText(it) : '';
   };
+  /** The three kinds of fact on a thing's card, in card order ('place' is always the last one). The pupil must ask
+   *  about exactly these; a question about any other kind gets no fact. [] for a thing that is not in this game. */
+  data.slotsOf = function (itemOrId) {
+    var it = itemOrId && typeof itemOrId === 'object' ? itemOrId : data.getItem(itemOrId);
+    return it && it.slots ? it.slots.slice() : [];
+  };
+  /** True when the pupil is asked for this thing's name (otherwise it is a surprise until Pip picks it up). */
+  data.nameIsSlot = function (itemOrId) { return data.slotsOf(itemOrId).indexOf('name') >= 0; };
   /** Colour name of a thing in this game (its icon is drawn in this colour). */
   data.itemColour = function (itemId) {
     var it = data.getItem(itemId);
     return it ? it.colour : null;
   };
-  /** The facts of this game's four things, for the log ('session' record) and the teacher view. */
+  /** This game's four things, for the log ('session' record) and the teacher view: the thing, its colour (icon),
+   *  the three kinds of fact on its card (`slots`) and their sentences (`facts`). `name` and `place` are always there. */
   data.sessionFacts = function () {
     return data.items.map(function (it) {
-      return { id: it.id, colour: it.colour, name: data.factText(it.id, 'name'), look: it.look, place: it.place };
+      var facts = {};
+      it.slots.forEach(function (f) { facts[f] = it.facts[f]; });
+      return { id: it.id, colour: it.colour, name: it.facts.name, place: it.place, slots: it.slots.slice(), facts: facts };
     });
   };
   data.goMap = function (itemIdOrIndex) {
@@ -903,15 +980,16 @@
     return out;
   }
   var allFactsMemo = null;
-  /** Every sentence Pip can ever use to give a fact, in any game (names, looks, place sentences). Sorted. */
+  /** Every sentence Pip can ever use to give a fact, in any game (all seven kinds). Sorted. */
   data.allFactTexts = function () {
     if (allFactsMemo) return allFactsMemo.slice();
     var set = {};
-    data.POOL.forEach(function (p) {
-      set['I need ' + p.name + '.'] = true;
-      p.sizes.forEach(function (s) { p.colours.forEach(function (c) { set[lookText(s, c)] = true; }); });
-    });
-    CLASSIC_CONTENT.items.forEach(function (it) { set[it.look] = true; set[it.place] = true; });
+    data.POOL.forEach(function (p) { set[nameText(p)] = true; set[p.why] = true; });
+    data.COLOURS.forEach(function (c) { set[colourText(c)] = true; });
+    data.SIZES.forEach(function (z) { set[sizeText(z)] = true; });
+    data.OWNERS.forEach(function (o) { set[whoseText(o)] = true; });
+    data.WHENS.forEach(function (w) { set[whenText(w)] = true; });
+    CLASSIC_CONTENT.items.forEach(function (it) { data.FACTS.forEach(function (f) { set[it.facts[f]] = true; }); });
     data.TEMPLATE_IDS.forEach(function (tid) {
       var tpl = TEMPLATES[tid];
       permutations(data.DOOR_TYPES, slotCount(tpl, 'door')).forEach(function (doors) {
@@ -926,15 +1004,20 @@
     return allFactsMemo.slice();
   };
 
-  /** Every word that could leak a fact (item nouns, landmark words, look words, place prepositions). */
+  /** Every word that could leak a fact (item nouns, colours, sizes, owners, reasons, times, landmark words, place
+   *  prepositions): every word of every fact sentence except the few frame words below. Model-written text may
+   *  not use any of them (MR.ai.validateReply). Every fact sentence keeps at least one such word (unit test), so no
+   *  fact can be written with frame words alone. */
+  data.FACT_FRAME_WORDS = ['it', 'is', 'and', 'the', 'to', 'of', 'in', 'a', 'i', 'need', 'my', 's', 'lost', 'on', 'at', 'this', 'last', 'because',
+    'see', 'find', 'way', 'things', 'play'];      /* Pip needs these himself ("I can't see a house.", "Which way?") */
   data.factWords = (function () {
     var set = {};
     function add(s) { String(s).toLowerCase().replace(/[^a-z ]/g, ' ').split(/\s+/).forEach(function (w) { if (w) set[w] = true; }); }
     data.POOL.forEach(function (p) { add(p.noun); });
-    data.SIZES.forEach(add); data.COLOURS.forEach(add);
-    data.allFactTexts().forEach(function (t) { if (!/^I need /.test(t)) add(t); });
+    data.SIZES.forEach(add); data.COLOURS.forEach(add); data.OWNERS.forEach(add);
+    data.allFactTexts().forEach(add);
     data.landmarkIds.forEach(function (id) { data.landmarkTypes[id].words.forEach(add); });
-    ['it', 'is', 'and', 'the', 'very', 'to', 'of', 'in', 'a'].forEach(function (w) { delete set[w]; });
+    data.FACT_FRAME_WORDS.forEach(function (w) { delete set[w]; });
     return Object.keys(set).sort();
   })();
 

@@ -16,7 +16,15 @@ test('state: flow Start -> Warm-up -> Ask/Go x4 -> break -> Guide x2 -> Review',
     // acceptance: no questions -> no Go, and no pick-up
     assert.equal(S.allFactsUnlocked(it.id), false);
     assert.equal(S.collectItem(it.id), false);
-    S.unlockFact(it.id, 'name'); S.unlockFact(it.id, 'look');
+    // only the three kinds of fact on this thing's card can be unlocked
+    const slots = MR.data.slotsOf(it);
+    assert.equal(slots.length, 3);
+    for (const f of MR.data.FACTS.filter((x) => !slots.includes(x))) assert.equal(S.unlockFact(it.id, f).isNew, false, f + ' is not on the card');
+    assert.equal(S.unlockFact(it.id, 'look').isNew, false, 'the old "look" fact does not exist any more');
+    assert.deepEqual(S.givenFacts(it.id), []);
+    S.unlockFact(it.id, slots[0]); S.unlockFact(it.id, slots[1]);
+    assert.deepEqual(S.givenFacts(it.id), slots.slice(0, 2));
+    assert.equal(S.allFactsUnlocked(it.id), false, 'Go stays locked until all 3 slots are lit');
     assert.equal(S.nextScreen().screen, 'ask');
     const u = S.unlockFact(it.id, 'place');
     assert.equal(u.allUnlocked, true);
@@ -41,15 +49,21 @@ test('state: flow Start -> Warm-up -> Ask/Go x4 -> break -> Guide x2 -> Review',
 test('state: hints, assisted flag, first-choice recording', () => {
   const MR = fresh(), S = MR.state;
   S.begin('6B-3');
-  const id = MR.data.items[0].id;
-  assert.equal(S.nextHintFact(id), 'name');
-  S.useHint(id, 'name', 1);
-  assert.equal(S.unlockFact(id, 'name').assisted, false, 'level 1 is not "assisted"');
-  assert.equal(S.nextHintFact(id), 'look');
-  S.useHint(id, 'look', 1); S.useHint(id, 'look', 2);
-  const u = S.unlockFact(id, 'look');
+  const id = MR.data.items[0].id, [a, b] = MR.data.slotsOf(id);
+  // hints are about the first locked slot of THIS thing's card
+  assert.equal(S.nextHintFact(id), a);
+  S.useHint(id, a, 1);
+  assert.equal(S.unlockFact(id, a).assisted, false, 'level 1 is not "assisted"');
+  assert.equal(S.nextHintFact(id), b);
+  S.useHint(id, b, 1); S.useHint(id, b, 2);
+  const u = S.unlockFact(id, b);
   assert.equal(u.assisted, true); assert.equal(u.hint_level, 2); assert.equal(u.isNew, true);
-  assert.equal(S.unlockFact(id, 'look').isNew, false);
+  assert.equal(S.unlockFact(id, b).isNew, false);
+  assert.equal(S.nextHintFact(id), 'place');
+  S.unlockFact(id, 'place');
+  assert.equal(S.nextHintFact(id), null);
+  const off = MR.data.FACTS.find((f) => !MR.data.slotsOf(id).includes(f));
+  assert.equal(S.useHint(id, off, 2), 0, 'no hint for a kind that is not on the card');
   let j = S.recordJunction(id, 0, 1, false);
   assert.deepEqual(j, { first: true, first_choice_correct: false, attempts: 1 });
   j = S.recordJunction(id, 0, 0, true);
@@ -83,23 +97,28 @@ test('class number validation', () => {
 });
 
 /* ------------------------------------------------------------------ log */
+const ASK = { name: 'What do you need?', colour: 'What colour is it?', size: 'Is it big or small?', whose: 'Whose is it?',
+  why: 'Why do you need it?', when: 'When did you lose it?', place: 'Where is it?' };
 function playOne(MR, classNo) {
   const S = MR.state, L = MR.log;
   S.begin(classNo);
   const key = MR.data.items[0], id = key.id;          // this game's first thing
   L.event('warmup', 'summary', { correct: 7, total: 10 });
   const turn = (text, mode, asr) => {
-    const result = Object.assign(MR.rules.answerAsk(key, text), { failed: false, source: 'rules' });
+    const result = Object.assign(MR.rules.answerAsk(key, text, S.givenFacts(id)), { failed: false, source: 'rules' });
     let assisted = false, hint_level = 0;
     if (result.fact_given) { const u = S.unlockFact(id, result.fact_given); assisted = u.assisted; hint_level = u.hint_level; }
     return L.askTurn({ item_id: id, input_mode: mode || 'text', asr_text: asr || '', sent_text: text, result, assisted, hint_level });
   };
+  const [a, b] = MR.data.slotsOf(key);                       // the two other kinds of fact on this thing's card
+  const off = MR.data.FACTS.find((f) => !key.slots.includes(f));
   turn('Where');                                             // clarification
   turn('Where it is?', 'speech', 'where it is');             // rewrite ok, grammar note, corrected ASR
-  turn('What do you need?');
-  S.useHint(id, 'look', 1); L.hint({ stage: 'ask', item_id: id, hint_level: 1, hint_fact: 'look' });
-  S.useHint(id, 'look', 2); L.hint({ stage: 'ask', item_id: id, hint_level: 2, hint_fact: 'look' });
-  turn('What does it look like?');                           // assisted
+  turn(ASK[a]);
+  S.useHint(id, b, 1); L.hint({ stage: 'ask', item_id: id, hint_level: 1, hint_fact: b });
+  S.useHint(id, b, 2); L.hint({ stage: 'ask', item_id: id, hint_level: 2, hint_fact: b });
+  turn(ASK[b]);                                              // assisted
+  turn(ASK[off]);                                            // not on the card: no fact, not a clarification
   turn('Where is it?');                                      // repeat: still 3 facts
   L.lockStage('ask', id);
   let j = S.recordJunction(id, 0, 1, false); L.goChoice({ item_id: id, junction_index: 0, choice: 1, correct: false, first: j.first, first_choice_correct: j.first_choice_correct });
@@ -169,7 +188,11 @@ test('log: per-pupil aggregation for the teacher view', () => {
   assert.equal(r.clarifications, 2);              // "Where" + "turn"
   assert.equal(r.rewrites_ok, 2);
   assert.equal(r.hints_used, 2);
-  assert.equal(r.ask_turns, 5);
+  assert.equal(r.ask_turns, 6);
+  assert.equal(r.off_card, 1);                    // one question about a kind of fact that was not on the card
+  const offTurn = MR.log.forStudent('5A-12', { stage: 'ask', event: 'turn' })[4];
+  assert.deepEqual([offTurn.fact_given, offTurn.off_card, offTurn.clarification, offTurn.ai_reply], [null, true, false, MR.data.text.offCard]);
+  assert.ok(MR.data.FACTS.includes(offTurn.category) && !MR.log.sessionOf('5A-12').items[0].slots.includes(offTurn.category), 'logged with the kind that was asked');
   assert.equal(r.go_attempts, 3);
   assert.equal(r.guide_instructions, 4);
   assert.equal(r.wall_hits, 1);
@@ -217,4 +240,54 @@ test('log: export, then import / merge on another device (idempotent)', () => {
   assert.equal(MR.log.aggregate().length, 2);
   assert.equal(MR.log.importJSON('not json').ok, false);
   assert.equal(MR.log.importJSON('{"app":"other"}').ok, false);
+});
+
+test('old evidence still counts: "look" facts of logs written when every card was name / look / place', () => {
+  const MR = fresh();
+  const old = { app: 'maze-rescue', format: 1, device_id: 'old', entries: [] };
+  let n = 0;
+  const add = (item, fact, extra) => old.entries.push(Object.assign({ id: 'old-' + (++n), class_no: '4C-01', stage: 'ask', event: 'turn', item_id: item,
+    sent_text: 'x', category: fact, fact_given: fact, ai_reply: 'y', timestamp: new Date(Date.UTC(2026, 0, 1, 9, 0, n)).toISOString() }, extra || {}));
+  for (const item of ['key', 'map', 'lamp', 'bag']) { add(item, 'name'); add(item, 'look', { assisted: item === 'map' }); add(item, 'place'); add(item, 'look'); }
+  assert.equal(MR.log.importJSON(JSON.stringify(old)).added, 16);
+  const row = MR.log.aggregate().find((r) => r.class_no === '4C-01');
+  assert.equal(row.facts_asked, 12, '4 things x (name, look, place)');
+  assert.equal(row.facts_assisted, 1);
+  assert.equal(MR.log.TOTALS.facts, 12);
+  assert.match(MR.log.toCSV().split('\r\n')[0], /^class_no,facts_asked_of_12,facts_assisted,/);
+  // new kinds are counted the same way, one per thing and kind; unknown kinds are not
+  MR.state.begin('5A-12', 'standard', { seed: 11 });
+  const it = MR.data.items[0];
+  for (const f of it.slots.concat([it.slots[0], 'weight'])) {
+    MR.log.askTurn({ item_id: it.id, sent_text: 'q', result: { category: f, fact_given: f, reply: 'r' } });
+  }
+  assert.equal(MR.log.aggregate().find((r) => r.class_no === '5A-12').facts_asked, 3);
+});
+
+test('a game saved when every card was name / look / place keeps working with the new cards', () => {
+  const MR = fresh(), S = MR.state;
+  S.begin('5A-12', 'standard', { seed: 21 });
+  const ids = MR.data.items.map((i) => i.id);
+  // rewrite the saved game the way the old version stored it: first thing found, second thing half asked
+  const all = MR.storage.get('mr.sessions.v1'), s = all['5A-12'];
+  ids.forEach((id, i) => {
+    s.items[id].facts = { name: i < 2, look: i < 2, place: i < 1 };
+    s.items[id].assisted = { name: false, look: i === 1, place: false };
+    s.items[id].hintLevel = { name: 0, look: 0, place: 0 };
+    s.items[id].collected = i < 1;
+  });
+  s.itemIndex = 1; s.inventory = [ids[0]]; s.stars = 1; s.warmup.done = true;
+  MR.storage.set('mr.sessions.v1', all);
+  S.init();                                              // reload
+  assert.equal(S.allFactsUnlocked(ids[0]), true, 'a thing already found stays complete');
+  const second = MR.data.slotsOf(ids[1]);
+  for (const f of second) {
+    const want = f === 'name' || f === 'colour' || f === 'size';       // old "name" and "look" (= colour and size) were asked
+    assert.equal(!!S.itemState(ids[1]).facts[f], want, ids[1] + ' ' + f);
+  }
+  assert.equal(S.nextScreen().screen, 'ask');
+  for (const f of second) S.unlockFact(ids[1], f);
+  assert.equal(S.allFactsUnlocked(ids[1]), true);
+  assert.equal(S.collectItem(ids[1]), true);
+  assert.equal(S.allFactsUnlocked(ids[2]), false);
 });

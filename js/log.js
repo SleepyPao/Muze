@@ -9,7 +9,8 @@
   var log = MR.log = {};
   var db = null;        /* { device_id, seq, entries:[], locks:{}, rubric:{} } */
 
-  log.TOTALS = { facts: 12, junctions: 8, exits: 2 };
+  log.TOTALS = { facts: 12, junctions: 8, exits: 2 };   /* 4 things x 3 facts on each card */
+  log.LEGACY_FACT = 'look';         /* the old "size and colour" fact of logs written before the seven kinds */
   log.GAP_CAP_MS = 3 * 60 * 1000;   /* idle gaps longer than this are not counted as working time */
 
   function load() {
@@ -70,6 +71,8 @@
   }
 
   /** One Ask turn. `result` is what MR.ai.ask resolved to. Failed turns ("say that again") are logged with category null.
+   *  category / fact_given are one of the seven kinds of MR.data.FACTS (name, colour, size, whose, why, when, place);
+   *  logs written when every card was name / look / place have 'look' there, and still count (log.aggregate).
    *  o: {item_id, input_mode:'text'|'speech', asr_text, sent_text, result, hint_level, assisted} */
   log.askTurn = function (o) {
     load();
@@ -80,6 +83,7 @@
       asr_text: o.asr_text || '', sent_text: o.sent_text || '',
       category: r.failed ? null : (r.category || null), ai_reply: r.reply || '',
       fact_given: r.failed ? null : (r.fact_given || null),
+      off_card: !r.failed && !!r.off_card,      /* a clear question about a kind of fact that is not on this thing's card */
       hint_level: o.hint_level || 0, clarification: !r.failed && !!r.clarification,
       grammar_note: r.grammar_note || '', assisted: !!o.assisted, ai_failed: !!r.failed, source: r.source || '',
       rewrite_success: prev && prev.clarification ? !!(r.fact_given && !r.failed) : null
@@ -149,7 +153,8 @@
       return true;
     }).map(MR.util.clone);
   };
-  /** The game content a pupil played (the newest 'session' record): {seed, difficulty, items:[{id, colour, name, look, place}]},
+  /** The game content a pupil played (the newest 'session' record): {seed, difficulty,
+   *  items:[{id, colour, name, place, slots:[3 kinds], facts:{kind: sentence}}]} (older logs: {id, colour, name, look, place}),
    *  or null (e.g. a log from before games were random). */
   log.sessionOf = function (classNo) {
     var list = log.forStudent(classNo, { stage: 'start', event: 'session' });
@@ -166,7 +171,8 @@
   /**
    * One row per pupil. All counts come from the log only.
    * @returns Array<{class_no, facts_asked (0-12), facts_assisted, junctions_first_correct (0-8), junctions_done,
-   *   exits_reached (0-2), clarifications, rewrites_ok, hints_used, ask_turns, go_attempts, guide_instructions,
+   *   exits_reached (0-2), clarifications, rewrites_ok, hints_used, ask_turns, off_card (questions about a kind of fact
+   *   that was not on the card), go_attempts, guide_instructions,
    *   wall_hits, ai_failures, time_ms, warmup_correct (number|null), warmup_total (number|null), grammar_notes:[{item_id,sent_text,note}],
    *   corrected_asr, first_time, last_time, rubric:{A_question_form, C_precision, C_repair}}>
    */
@@ -184,7 +190,7 @@
       var row = {
         class_no: classNo, facts_asked: 0, facts_assisted: 0, junctions_first_correct: 0, junctions_done: 0, exits_reached: 0,
         clarifications: 0, rewrites_ok: 0, hints_used: 0, ask_turns: 0, go_attempts: 0, guide_instructions: 0, wall_hits: 0,
-        ai_failures: 0, time_ms: 0, warmup_correct: null, warmup_total: null, grammar_notes: [], corrected_asr: 0,
+        ai_failures: 0, off_card: 0, time_ms: 0, warmup_correct: null, warmup_total: null, grammar_notes: [], corrected_asr: 0,
         first_time: list.length ? list[0].timestamp : null, last_time: list.length ? list[list.length - 1].timestamp : null,
         rubric: log.getRubric(classNo)
       };
@@ -201,7 +207,8 @@
         if (e.rewrite_success === true) row.rewrites_ok++;
         if (e.stage === 'ask' && e.event === 'turn') {
           row.ask_turns++;
-          if (e.fact_given && MR.data.getItem(e.item_id) && MR.data.FACTS.indexOf(e.fact_given) >= 0) {
+          if (e.off_card) row.off_card++;
+          if (e.fact_given && MR.data.getItem(e.item_id) && (MR.data.FACTS.indexOf(e.fact_given) >= 0 || e.fact_given === log.LEGACY_FACT)) {
             var fk = e.item_id + '.' + e.fact_given;
             if (!facts[fk]) { facts[fk] = true; if (e.assisted) assisted[fk] = true; }
           }

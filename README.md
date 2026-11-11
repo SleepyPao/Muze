@@ -35,6 +35,8 @@ INT4099 小组展示用的可运行原型。对象是香港小五、小六学生
 
 同一台设备可以让多名学生先后各玩一局，证据按班号分开。多台设备的数据可在老师视图里用 "Import JSON" 合并。
 
+**每件物品问的问题不同：** 事实卡 3 格，Where 固定，另外两格从 What / Colour / Size / Whose / Why / When 六种里抽，四件物品组合各不相同，一局内六种都会问到。格子上的标签提示该问什么；没有 What 格时，物品捡到才揭晓。问了卡片上没有的内容，Pip 只说 "I can't tell you that. Look at your card."，不给事实。
+
 **"Go straight" 规则：** 只说 "go straight" 时 Pip 会一直走到这条路的尽头，不在岔路口停。想让 Pip 中途停下，要说清楚停在哪里：`go straight until the well`、`go straight 2 steps`、`turn left at the well`。Pip 只能沿直线走，不会自己拐弯找路；要去不在正前方的地标，需要学生一步步指挥。
 
 **左右规则：** left / right 指 Pip 自己的左右。热身题里 Pip 总是背对学生走（学生的左 = Pip 的左），不会出现歧义。
@@ -113,8 +115,8 @@ DEEPSEEK_API_KEY=sk-... npm run serve      # 即 node server/proxy.js，零依�
 ```bash
 npm install                 # 只安装开发用的 Playwright
 npx playwright install chromium
-npm test                    # 79 个单元测试（规则、迷宫、随机内容 360 个局号、提示、日志、AI 接口、语音输入、中转服务器）
-npm run test:e2e            # 断网的无头浏览器完整通关，共 160 项检查：两名学生（内容不同）、两种难度、刷新后同一班号内容不变、
+npm test                    # 105 个单元测试（规则、迷宫、随机内容 360 个局号、提示、日志、AI 接口、语音输入、中转服务器）
+npm run test:e2e            # 断网的无头浏览器完整通关，共 245 项检查：两名学生（内容不同）、两种难度、刷新后同一班号内容不变、
                             # 只照第 2 级提示打字走出两条路线、图例、10 秒倒计时（模拟麦克风）、老师视图、坏 AI
 ```
 

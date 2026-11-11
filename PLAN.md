@@ -7,6 +7,11 @@
 > 不再有 Player A / Player B、Speaker / Navigator 和交换角色提示；Start 只输入一个班号；日志不带 `player` 字段，证据按班号区分。
 > 老师视图每位学生的合计相应变为：事实数共 12、岔路口首次正确数共 8、到达出口共 2。下文中与双人有关的描述均按此修订理解。
 
+> **修订（2026-11-11，以此为准）：每件物品的问题不同。** 事实类型由 name / look / place 三种扩为七种：
+> place（Where）、name（What）、colour、size、whose、why、when。每件物品的事实卡仍是 3 格：place 固定，另外两格按当局种子从其余六种里抽取，
+> 四件物品组合各不相同，一局内六种都会用到。问了卡片上没有的类型，Pip 不给事实（"I can't tell you that. Look at your card."）。
+> 每位学生合计仍为 12 个事实；日志的 `category` / `fact_given` 取这七种值。物品、颜色、地图、热身题、Guide 迷宫也按种子每局随机。
+
 ## 1. 目标与范围
 
 - 对象：香港小五至小六学生，英语约 A2，两人共用一台设备。

@@ -21,7 +21,8 @@
     return s;
   }
 
-  /** This pupil's own four things (every game is different): icon in the pupil's colour + the three facts. */
+  /** This pupil's own four things (every game is different): icon in the pupil's colour + the three facts of its card
+   *  (the kinds are different from thing to thing: name / colour / size / whose / why / when + always the place). */
   function thingsCard(classNo) {
     var sess = MR.log.sessionOf(classNo);
     var card = el('div', { class: 'mr-card mr-teach__things', attrs: { style: 'margin-bottom:12px' } }, [el('h4', { class: 'mr-card__title',
@@ -33,8 +34,17 @@
       var icon = el('img', { class: 'mr-teach__thingicon', alt: it.id, width: 32, height: 32,
         attrs: { style: 'image-rendering:pixelated;vertical-align:middle;margin-right:6px' } });
       try { icon.src = MR.sprites.item(it.id, it.colour).toDataURL(); } catch (e) { /* no icon */ }
-      list.appendChild(el('li', { class: 'mr-teach__thing', dataset: { item: it.id } }, [icon,
-        el('span', {}, [el('b', { text: it.name + ' ' }), el('span', { text: it.look + ' ' }), el('span', { text: it.place })])]));
+      /* the three questions this pupil had to ask about the thing: kind of fact + Pip's answer */
+      var parts = [el('b', { text: it.id + ' ' })];
+      if (it.slots && it.facts) {
+        it.slots.forEach(function (f) {
+          parts.push(el('span', { class: 'mr-teach__fact', dataset: { fact: f } }, [
+            el('i', { text: (MR.data.FACT_LABELS[f] || f) + ': ', attrs: { style: 'font-style:normal;font-weight:800;color:#6b5a4e' } }), it.facts[f] + ' ']));
+        });
+      } else {      /* a game from before the cards had different questions: name / look / place */
+        parts.push(el('span', { text: [it.name, it.look, it.place].filter(Boolean).join(' ') }));
+      }
+      list.appendChild(el('li', { class: 'mr-teach__thing', dataset: { item: it.id, slots: (it.slots || []).join(',') } }, [icon, el('span', {}, parts)]));
     });
     card.appendChild(list);
     return card;
@@ -60,6 +70,7 @@
       var flags = [];
       if (e.category) flags.push(e.category);
       if (e.fact_given) flags.push('fact: ' + e.fact_given);
+      if (e.off_card) flags.push('not on the card (no fact)');
       if (e.assisted) flags.push('assisted');
       if (e.clarification) flags.push('clarify');
       if (e.rewrite_success === true) flags.push('rewrite ok');

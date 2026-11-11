@@ -4,13 +4,16 @@ const assert = require('node:assert/strict');
 const { MR } = require('./helper');
 const { data, maze } = MR;
 
-test('fact table: 4 items, each with name/look/place and 2 junctions of 2-3 options', () => {
+test('fact table: 4 items, each with 3 card slots (place + 2 others), 7 fact sentences and 2 junctions of 2-3 options', () => {
   assert.equal(data.items.length, 4);
   assert.equal(data.items[0].id, 'key');
   assert.equal(data.items[0].place, 'It is behind the red door, next to the blue fountain.');
   for (const it of data.items) {
     assert.match(it.name, /^an? \w+$/);
-    assert.match(it.look, /^It is .+\.$/);
+    assert.equal(data.slotsOf(it).length, 3);
+    assert.equal(data.slotsOf(it)[2], 'place', 'place is always the last slot');
+    for (const f of data.FACTS) assert.match(data.factText(it.id, f), /^(It is|I need|I lost) .+\.$/, f);
+    assert.equal(data.factText(it.id, 'place'), it.place);
     assert.match(it.place, /^It is .+\.$/);
     assert.equal(it.junctions.length, 2);
     for (const j of it.junctions) {
@@ -148,6 +151,10 @@ test('warm-up: 10+ questions of two types that do not use the item facts', () =>
 test('hint ladder has two levels per fact', () => {
   for (const f of data.FACTS) { assert.ok(data.hints[f][1]); assert.ok(data.hints[f][2]); }
   assert.equal(data.hints.place[1], 'Ask about the place.');
+  assert.equal(data.hints.colour[1], 'Ask about the colour.');
+  assert.equal(data.hints.colour[2], 'What colour …?');
+  assert.deepEqual(data.FACTS, ['name', 'colour', 'size', 'whose', 'why', 'when', 'place']);
+  for (const f of data.FACTS) { assert.ok(data.FACT_LABELS[f], f); assert.match(data.text.clarify[f], /^Do you mean .+\?$/); }
 });
 
 test('warm-up turn questions never depend on whose left is meant (Pip walks away from the viewer)', () => {

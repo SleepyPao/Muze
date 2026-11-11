@@ -26,6 +26,9 @@
 .mr-fact.is-assisted .mr-fact__label::after { content: " •"; color: var(--sun); }
 .mr-fact.is-new { animation: mr-glow 0.9s ease-out; }
 .mr-fact.is-hinted { outline: 4px solid var(--sun); outline-offset: 2px; }
+.mr-fact.is-nudged { animation: mr-nudge 0.5s ease-in-out; }
+.mr-fact.is-nudged .mr-fact__label { background: #b0452f; transition: background 0.2s; }
+@keyframes mr-nudge { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
 .mr-facts--compact .mr-fact { grid-template-columns: 100px 1fr; }
 .mr-facts--compact .mr-fact__text { font-size: 18px; }
 .mr-facts--compact .mr-fact__body { min-height: 46px; padding: 6px 10px; }

@@ -1,6 +1,10 @@
-/* Ask (spec 4.2): the pupil asks Pip about the thing he needs. Fact card with three slots (name / look / place) that
- * light up only when asked. One question gives at most one fact. Unclear -> a clarifying question, no fact.
- * Off task -> one sentence back to the task. No grammar correction is shown (grammar_note goes to the log only).
+/* Ask (spec 4.2): the pupil asks Pip about the thing he needs. Fact card with three slots that light up only when
+ * asked. The slots are DIFFERENT from thing to thing (MR.data.slotsOf: 'place' + two of name / colour / size / whose /
+ * why / when); the label of each slot tells the pupil what to find out. One question gives at most one fact.
+ * Unclear -> a clarifying question, no fact. A question about something that is not on the card -> no fact
+ * ("I can't tell you that. Look at your card."). Off task -> one sentence back to the task.
+ * No grammar correction is shown (grammar_note goes to the log only).
+ * When 'name' is not on the card the thing stays a surprise ("?") until Pip picks it up in Go.
  * Hints only when the pupil clicks Hint: level 1 general, level 2 sentence starter (level 2 marks the fact `assisted`).
  * Go stays locked until all three facts are lit.
  *
@@ -8,18 +12,19 @@
 (function (root) {
   'use strict';
   var MR = root.MR, ui = MR.ui, el = ui.el;
-  var LABEL = { name: 'What', look: 'Looks like', place: 'Where' };
+  var LABEL = MR.data.FACT_LABELS;
 
   var kit = MR.askKit = {};
 
   /** The fact card. @returns {{el, update(), flash(fact), focus(fact)}} */
   kit.factCard = function (item, opts) {
     opts = opts || {};
-    var slots = {};
+    var slots = {}, kinds = MR.data.slotsOf(item);
     var card = el('div', { class: 'mr-card mr-facts' + (opts.compact ? ' mr-facts--compact' : '') }, [
       el('h3', { class: 'mr-card__title', text: opts.title || 'What Pip told me' })
     ]);
-    MR.data.FACTS.forEach(function (f) {
+    card.dataset.slots = kinds.join(',');
+    kinds.forEach(function (f) {
       var icon = el('canvas', { class: 'mr-fact__icon', width: 16, height: 16 });
       var text = el('p', { class: 'mr-fact__text' });
       var slot = el('div', { class: 'mr-fact', dataset: { fact: f } }, [
@@ -30,7 +35,7 @@
     });
     function update() {
       var s = MR.state.itemState(item.id);
-      MR.data.FACTS.forEach(function (f) {
+      kinds.forEach(function (f) {
         var on = !!(s && s.facts[f]), sl = slots[f];
         sl.el.classList.toggle('is-on', on);
         sl.el.classList.toggle('is-assisted', !!(s && s.assisted[f]));
@@ -43,8 +48,16 @@
     update();
     return {
       el: card, update: update,
+      /** The card shakes its locked slots: "Look at your card." */
+      nudge: function () {
+        kinds.forEach(function (k) {
+          var e = slots[k].el; if (e.classList.contains('is-on')) return;
+          e.classList.remove('is-nudged'); void e.offsetWidth; e.classList.add('is-nudged');
+          root.setTimeout(function () { e.classList.remove('is-nudged'); }, 1200);
+        });
+      },
       flash: function (f) { var s = slots[f]; if (!s) return; s.el.classList.remove('is-new'); void s.el.offsetWidth; s.el.classList.add('is-new'); },
-      focus: function (f) { MR.data.FACTS.forEach(function (k) { slots[k].el.classList.toggle('is-hinted', k === f); }); }
+      focus: function (f) { kinds.forEach(function (k) { slots[k].el.classList.toggle('is-hinted', k === f); }); }
     };
   };
 
@@ -57,7 +70,7 @@
    */
   kit.handle = function (item, payload, hooks) {
     hooks = hooks || {};
-    var given = MR.data.FACTS.filter(function (f) { var s = MR.state.itemState(item.id); return s && s.facts[f]; });
+    var given = MR.state.givenFacts(item.id);
     ui.dialog.setBusy(true);
     ui.dialog.say('…', { speak: false, instant: true });
     return MR.ai.ask({ item: item, given: given, text: payload.text }).then(function (r) {
@@ -69,6 +82,7 @@
       MR.log.askTurn({ item_id: item.id, input_mode: payload.input_mode, asr_text: payload.asr_text, sent_text: payload.text,
         result: r, hint_level: hintLevel, assisted: !!(u && u.assisted) });
       var emotion = r.failed ? 'confused' : (r.fact_given ? 'happy' : (r.category === 'unclear' ? 'confused' : 'neutral'));
+      if (r.off_card && hooks.card) hooks.card.nudge();        /* "Look at your card." */
       var said = ui.dialog.say(r.reply, { emotion: emotion });
       if (u) {
         if (hooks.card) { hooks.card.update(); if (u.isNew) { hooks.card.flash(r.fact_given); MR.audio.sfx('unlock'); } }
@@ -102,7 +116,7 @@
       var hintBox = el('div', { class: 'mr-hintbox', attrs: { 'aria-live': 'polite' }, hidden: true });
       var goBtn = ui.button('Let’s go!', function () { if (MR.state.allFactsUnlocked(item.id)) MR.go('go', { item: idx }); }, 'primary big');
       goBtn.id = 'mr-go-btn';
-      var lock = el('p', { class: 'mr-ask__lock', text: 'Ask Pip about the thing. Then you can go.' });
+      var lock = el('p', { class: 'mr-ask__lock', text: 'Ask about the 3 things on the card. Then you can go.' });
       function refreshGo() {
         var all = MR.state.allFactsUnlocked(item.id);
         goBtn.disabled = !all; lock.hidden = all;
@@ -123,7 +137,7 @@
       rootEl.appendChild(el('div', { class: 'mr-ask' }, [
         el('div', { class: 'mr-ask__left mr-card' }, [
           el('div', { class: 'mr-ask__stage' }, [big, thingBox]),
-          el('p', { class: 'mr-ask__tip', text: 'Pip needs something. Ask Pip questions in English.' })
+          el('p', { class: 'mr-ask__tip', text: 'Pip needs something. Look at the card and ask Pip in English.' })
         ]),
         el('div', { class: 'mr-ask__right' }, [card.el, hintBox, el('div', { class: 'mr-ask__go' }, [lock, goBtn])])
       ]));

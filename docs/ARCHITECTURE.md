@@ -63,6 +63,14 @@ MR.render.drawPortrait(canvas, 'neutral'|'happy'|'confused'|'thinking'|'surprise
 MR.log.askTurn / goChoice / guideTurn / hint / event / lockStage / aggregate / toCSV / exportJSON / importJSON
 ```
 
+## Fact types and card slots
+
+Seven fact types: `place`, `name`, `colour`, `size`, `whose`, `why`, `when`. Each thing has 3 card slots
+(`MR.data.slotsOf(item)`): `place` always, plus two of the other six chosen from the game seed, so the four things
+ask for different facts and all six types appear in one game. A clear question about a type that is not on the card
+gets no fact (`off_card: true` in the log). Totals stay 3 facts per thing, 12 per pupil. Old logs with `look` still count.
+Plain "go straight" walks to the end of the corridor (engine 3; older log records replay with the junction stop).
+
 ## Who decides what (spec §2.7, §6)
 
 * The model only **classifies** (Ask) or **parses** (Guide). It never decides right / wrong.
@@ -123,7 +131,7 @@ Other flags: `fast=1` (no typing effect, instant walking, no voice), `offline=1`
 ## Tests
 
 ```
-npm test             # 56 unit tests (Node: pure logic + relay)
-npm run test:e2e     # full playthrough in headless Chromium, network blocked (141 checks)
+npm test             # 105 unit tests (Node: pure logic + relay)
+npm run test:e2e     # full playthrough in headless Chromium, network blocked (245 checks)
 node tools/shot.js "?debug=go&item=1" out.png    # screenshot helper
 ```
