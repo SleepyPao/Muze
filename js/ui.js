@@ -86,7 +86,7 @@
     if (current && current.def.unmount) {
       try { current.def.unmount(); } catch (e) { if (root.console) root.console.error('[MR] unmount failed', e); }
     }
-    MR.speech.stopListening(); MR.speech.cancelSpeak();
+    MR.speech.abortListening(); MR.speech.cancelSpeak();
     ui.dialog.reset();
     ui.overlay.hide();
     var el = $('mr-screen');
@@ -115,7 +115,10 @@
     refresh: function () {
       var s = MR.state.get();
       var inv = $('mr-inventory');
-      if (inv.childNodes.length !== MR.data.items.length) {
+      /* this game's things (each game has its own four, in its own colours): rebuild the slots when they change */
+      var sig = MR.data.items.map(function (it) { return it.id + ':' + (it.colour || ''); }).join(',');
+      if (inv.dataset.sig !== sig) {
+        inv.dataset.sig = sig;
         inv.innerHTML = '';
         MR.data.items.forEach(function (it) {
           var c = ui.el('canvas', { class: 'mr-slot__icon', width: 16, height: 16 });
@@ -150,15 +153,111 @@
   };
 
   /* ------------------------------------------------------------------ dialog bar */
-  var dlg = { onSend: null, onHint: null, asr: '', usedMic: false, busy: false, inputOn: true, sayToken: 0, listening: null, emotion: 'neutral' };
+  var dlg = { onSend: null, onHint: null, asr: '', usedMic: false, busy: false, inputOn: true, sayToken: 0, emotion: 'neutral',
+    mic: null,      /* while listening: {token, handle, start, timer} */
+    micSeq: 0 };    /* results from an older Speak press (token !== micSeq) are ignored */
+  /** Seconds the pupil can speak after pressing Speak. A countdown ring shows them; at 0 listening stops. */
+  ui.MIC_SECONDS = 10;
+  /** Listening also stops this long after the last finished phrase, so a pupil who is done need not wait for 0. */
+  ui.MIC_QUIET_MS = 2000;
 
   function setSpeechText(t) { $('mr-speech').textContent = t; }
   function updateControls() {
     var off = dlg.busy || !dlg.inputOn;
     $('mr-input').disabled = off; $('mr-send').disabled = off; $('mr-mic').disabled = off;
     $('mr-dialog').classList.toggle('is-busy', dlg.busy);
+    if (off && dlg.mic) cancelMic();
   }
-  function stopMic() { if (dlg.listening) { dlg.listening.stop(); dlg.listening = null; } $('mr-mic').classList.remove('is-listening'); }
+
+  /* ---------- microphone: Speak -> Stop + 10 s countdown ring next to the button */
+  function micTimerEl() {
+    var t = $('mr-mictimer');
+    if (!t) {
+      t = ui.el('span', { id: 'mr-mictimer', class: 'mr-mictimer', hidden: true, attrs: { role: 'timer', 'aria-label': 'Seconds left to speak' } },
+        [ui.el('span', { class: 'mr-mictimer__n', text: String(ui.MIC_SECONDS) })]);
+      var mic = $('mr-mic');
+      mic.parentNode.insertBefore(t, mic.nextSibling);
+    }
+    return t;
+  }
+  function micUI(on) {
+    var b = $('mr-mic');
+    b.classList.toggle('is-listening', on);
+    b.textContent = on ? 'Stop' : 'Speak';
+    b.setAttribute('aria-label', on ? 'Stop speaking' : 'Speak');
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    micTimerEl().hidden = !on;
+    $('mr-dialog').classList.toggle('is-listening', on);
+  }
+  function drawTimer(msLeft) {
+    var t = micTimerEl(), total = ui.MIC_SECONDS * 1000;
+    var secs = Math.max(0, Math.ceil(msLeft / 1000));
+    t.firstChild.textContent = String(secs);
+    t.style.setProperty('--left', String(Math.max(0, Math.min(1, msLeft / total))));
+    t.classList.toggle('is-low', secs <= 3);
+  }
+  /** Listening UI off (the session may still deliver its final text: the token stays valid). */
+  function endMicUI() {
+    if (dlg.mic) { clearInterval(dlg.mic.timer); dlg.mic = null; }
+    micUI(false);
+  }
+  /** Stop and keep what was heard (Stop button, countdown at 0, quiet after a phrase). At 0 the ring shows "0" for a moment. */
+  function stopMic(atZero) {
+    var m = dlg.mic;
+    if (!m) return;
+    drawTimer(0);
+    endMicUI();
+    if (atZero) {
+      var t = micTimerEl();
+      t.hidden = false;
+      setTimeout(function () { if (!dlg.mic) t.hidden = true; }, 700);
+    }
+    if (m.handle) m.handle.stop();
+  }
+  /** Cancel: Send, screen change, input turned off. Nothing heard later reaches the box. */
+  function cancelMic() {
+    var m = dlg.mic;
+    dlg.micSeq++;
+    endMicUI();
+    if (m && m.handle) { if (m.handle.abort) m.handle.abort(); else m.handle.stop(); }
+  }
+  function startMic() {
+    var input = $('mr-input');
+    var token = ++dlg.micSeq;
+    var mine = function () { return token === dlg.micSeq; };
+    var m = dlg.mic = { token: token, handle: null, start: Date.now(), timer: 0, lastFinal: 0 };
+    micUI(true);
+    drawTimer(ui.MIC_SECONDS * 1000);
+    m.timer = setInterval(function () {
+      if (dlg.mic !== m) return clearInterval(m.timer);
+      var now = Date.now(), left = ui.MIC_SECONDS * 1000 - (now - m.start);
+      if (left <= 0) stopMic(true);
+      else if (m.lastFinal && now - m.lastFinal >= ui.MIC_QUIET_MS) stopMic();
+      else drawTimer(left);
+    }, 100);
+    var handle = MR.speech.listen({
+      onResult: function (text, isFinal) {
+        if (!mine()) return;
+        input.value = text;
+        if (isFinal) { dlg.asr = text; dlg.usedMic = true; m.lastFinal = Date.now(); } else m.lastFinal = 0;   /* still talking */
+      },
+      onEnd: function (finalText) {
+        if (!mine()) return;
+        if (dlg.mic === m) endMicUI();   /* the recogniser stopped by itself (a pause) */
+        if (finalText) { dlg.asr = finalText; dlg.usedMic = true; input.value = finalText; }
+        ui.dialog.focus();               /* the pupil checks / edits the text, then presses Send */
+      },
+      onError: function (code) {
+        if (!mine()) return;
+        if (dlg.mic === m) endMicUI();
+        if (code === 'not-allowed' || code === 'service-not-allowed') ui.toast('The microphone is off. You can type.');
+        else if (code !== 'no-speech' && code !== 'aborted') ui.toast('I can’t hear you. You can type.');
+      }
+    });
+    if (dlg.mic === m) {
+      if (handle) m.handle = handle; else endMicUI();
+    }
+  }
 
   ui.dialog = {
     /** Show the bar. opts: {input:true, hint:true, placeholder, emotion:'neutral', text:''}. input:false = Pip only talks. */
@@ -173,10 +272,10 @@
       if (opts.text != null) setSpeechText(opts.text);
       updateControls();
     },
-    hide: function () { $('mr-dialog').hidden = true; stopMic(); },
+    hide: function () { $('mr-dialog').hidden = true; cancelMic(); },
     /** Hide and forget everything (handlers, text, buttons). The router calls this on every screen change. */
     reset: function () {
-      dlg.sayToken++; stopMic();
+      dlg.sayToken++; cancelMic();
       dlg.onSend = null; dlg.onHint = null; dlg.asr = ''; dlg.usedMic = false; dlg.busy = false; dlg.inputOn = true; dlg.emotion = 'neutral';
       $('mr-dialog').hidden = true; $('mr-form').hidden = false; $('mr-hint').hidden = false; $('mr-hint').disabled = false;
       $('mr-input').value = ''; $('mr-input').placeholder = 'Type in English…';
@@ -243,6 +342,12 @@
     clear: function () { $('mr-input').value = ''; dlg.asr = ''; dlg.usedMic = false; },
     getValue: function () { return $('mr-input').value; },
     setValue: function (s) { $('mr-input').value = s; },
+    /** True while the mic is listening (the countdown is running). */
+    isListening: function () { return !!dlg.mic; },
+    /** Stop listening and keep the words in the box (same as pressing Stop). */
+    stopListening: function () { stopMic(); },
+    /** Seconds left on the mic countdown, or null when not listening (tests / debug). */
+    micSecondsLeft: function () { return dlg.mic ? Math.max(0, Math.ceil((ui.MIC_SECONDS * 1000 - (Date.now() - dlg.mic.start)) / 1000)) : null; },
     /** Replace the input row by buttons, e.g. setActions([{label:'Let’s go!', primary:true, onClick:fn}]). null = input row back. */
     setActions: function (list) {
       var box = $('mr-actions');
@@ -260,29 +365,15 @@
     if (dlg.busy || !dlg.inputOn) return;
     var input = $('mr-input'), text = input.value.replace(/\s+/g, ' ').trim();
     if (!text) { ui.dialog.focus(); return; }
-    stopMic();
+    cancelMic();
     var payload = { text: text, input_mode: dlg.usedMic && dlg.asr ? 'speech' : 'text', asr_text: dlg.usedMic ? dlg.asr : '' };
     ui.dialog.clear();
     MR.audio.sfx('click');
     if (dlg.onSend) dlg.onSend(payload);
   }
   function toggleMic() {
-    if (dlg.listening) { stopMic(); return; }
-    var input = $('mr-input');
-    dlg.listening = MR.speech.listen({
-      onResult: function (text, isFinal) { input.value = text; if (isFinal) { dlg.asr = text; dlg.usedMic = true; } },
-      onEnd: function (finalText) {
-        dlg.listening = null; $('mr-mic').classList.remove('is-listening');
-        if (finalText) { dlg.asr = finalText; dlg.usedMic = true; input.value = finalText; }
-        ui.dialog.focus();           /* the pupil checks / edits the text, then presses Send */
-      },
-      onError: function (code) {
-        dlg.listening = null; $('mr-mic').classList.remove('is-listening');
-        if (code === 'not-allowed' || code === 'service-not-allowed') ui.toast('The microphone is off. You can type.');
-        else if (code !== 'no-speech' && code !== 'aborted') ui.toast('I can’t hear you. You can type.');
-      }
-    });
-    if (dlg.listening) $('mr-mic').classList.add('is-listening');
+    if (dlg.mic) { stopMic(); return; }
+    startMic();
   }
 
   /* ------------------------------------------------------------------ overlay */
@@ -318,6 +409,7 @@
     $('mr-form').addEventListener('submit', function (e) { e.preventDefault(); send(); });
     $('mr-input').addEventListener('input', function () { if (!$('mr-input').value) { dlg.asr = ''; dlg.usedMic = false; } });
     $('mr-mic').addEventListener('click', toggleMic);
+    micTimerEl();
     $('mr-hint').addEventListener('click', function () { MR.audio.sfx('click'); if (dlg.onHint && !dlg.busy) dlg.onHint(); });
     $('mr-overlay-btn').addEventListener('click', function () {
       var r = overlayResolve; MR.audio.sfx('click'); ui.overlay.hide(); if (r) r();

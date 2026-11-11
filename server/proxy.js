@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /* Maze Rescue - tiny zero-dependency relay for whole-class use.
  *
- *   DEEPSEEK_API_KEY=sk-...  node server/proxy.js
+ *   DEEPSEEK_API_KEY=sk-...  node server/proxy.js       (or put apiKey in config.local.js: read here, never served)
+ *   Double-click start-mac.command / start-windows.bat to run it on this computer only (http://localhost:8787/).
+ *   Opening the game from http://localhost (not file://) lets Chrome REMEMBER the microphone permission.
  *
  * - Serves the game (static files from the repo root) on http://0.0.0.0:8787/
  * - POST /api/chat  -> forwards the chat request to DeepSeek with the key from the environment.
@@ -20,12 +22,28 @@ var fs = require('fs');
 var path = require('path');
 var URL = require('url').URL;
 
+var vm = require('vm');
 var ROOT = path.resolve(__dirname, '..');
+
+/** Read config.local.js on the SERVER (it is never sent to a browser). Returns window.MR_CONFIG or {}. */
+function readLocalConfig(file) {
+  try {
+    var src = fs.readFileSync(file, 'utf8');
+    var sandbox = { window: {} };
+    vm.runInNewContext(src, sandbox, { timeout: 200, filename: 'config.local.js' });
+    var c = sandbox.window.MR_CONFIG;
+    return c && typeof c === 'object' ? c : {};
+  } catch (e) { return {}; }
+}
+var LOCAL = readLocalConfig(process.env.MR_LOCAL_CONFIG || path.join(ROOT, 'config.local.js'));
 var PORT = parseInt(process.env.PORT || '8787', 10);
 var HOST = process.env.HOST || '0.0.0.0';
-var KEY = process.env.DEEPSEEK_API_KEY || '';
-var BASE = (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/+$/, '');
-var MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-flash';
+var KEY = LOCAL.offline ? '' : (process.env.DEEPSEEK_API_KEY || LOCAL.apiKey || '');
+var KEY_SOURCE = process.env.DEEPSEEK_API_KEY ? 'DEEPSEEK_API_KEY' : 'config.local.js';
+var BASE = (process.env.DEEPSEEK_BASE_URL || LOCAL.baseUrl || 'https://api.deepseek.com').replace(/\/+$/, '');
+var MODEL = process.env.DEEPSEEK_MODEL || LOCAL.model || 'deepseek-flash';
+/* browser-side settings that may be passed on (never the key) */
+var PASS_ON = ['speechInput', 'speechOutput', 'speechLang', 'timeoutMs'];
 var UPSTREAM_TIMEOUT = parseInt(process.env.UPSTREAM_TIMEOUT_MS || '10000', 10);
 var MAX_BODY = 16 * 1024;
 var RATE_PER_MIN = 60;              /* per client address */
@@ -49,6 +67,7 @@ function serveStatic(req, res, pathname) {
   if (rel === '') rel = 'index.html';
   if (rel === 'config.local.js') {
     var cfg = KEY ? { proxyUrl: '/api/chat', model: MODEL } : { offline: true };
+    PASS_ON.forEach(function (k) { if (LOCAL[k] != null) cfg[k] = LOCAL[k]; });
     return send(res, 200, 'window.MR_CONFIG = ' + JSON.stringify(cfg) + ';\n', TYPES['.js']);
   }
   var file = path.resolve(ROOT, rel);
@@ -153,7 +172,7 @@ var server = http.createServer(function (req, res) {
 if (require.main === module) {
   server.listen(PORT, HOST, function () {
     console.log('Maze Rescue relay on http://' + (HOST === '0.0.0.0' ? 'localhost' : HOST) + ':' + PORT + '/');
-    console.log(KEY ? 'AI: on (model ' + MODEL + ', key from DEEPSEEK_API_KEY)' : 'AI: OFF - no DEEPSEEK_API_KEY, the game runs in Demo mode');
+    console.log(KEY ? 'AI: on (model ' + MODEL + ', key from ' + KEY_SOURCE + ', kept on this computer)' : 'AI: OFF - no key, the game runs in Demo mode');
   });
 }
-module.exports = { server: server, cleanRequest: cleanRequest };
+module.exports = { server: server, cleanRequest: cleanRequest, readLocalConfig: readLocalConfig };

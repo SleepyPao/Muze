@@ -1,7 +1,7 @@
 /* Loads the pure-logic files into Node exactly as the browser does (classic scripts on one global: globalThis.MR). */
 'use strict';
 const path = require('path');
-const FILES = ['core', 'maze', 'data', 'rules', 'guide-engine', 'state', 'log', 'ai', 'speech'];
+const FILES = ['core', 'maze', 'data', 'rules', 'guide-engine', 'guide-hint', 'state', 'log', 'ai', 'speech'];
 if (!globalThis.MR || !globalThis.MR.ai) {
   for (const f of FILES) require(path.join(__dirname, '..', 'js', f + '.js'));
   globalThis.MR.storage.useMemory();

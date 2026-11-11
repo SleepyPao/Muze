@@ -21,12 +21,20 @@
  *   sc.setItemVisible(bool)
  *   sc.resize()                        recompute the integer scale (called automatically on window resize)
  *   sc.tileRect(x, y) -> DOMRect-like  screen rectangle of a tile (for DOM labels)
+ *   sc.landmarks()                     -> [{id, type, x, y}] the map's landmarks + the exit gate (type 'exit') when shown
+ *   sc.landmarkAt(x, y)                -> {id, type, x, y} | null   landmark standing on that tile
+ *   sc.hitLandmark(clientX, clientY)   -> {id, type, x, y} | null   landmark whose PICTURE is under the pointer (front first)
+ *   sc.onLandmarkClick(fn(lm, ev))     tap on a landmark picture (independent of onTileClick; both may fire)
+ *   sc.ping(x, y, {ms:2400})           a landmark (or tile) blinks with a yellow frame and a bouncing arrow
+ *   sc.showLabel(x, y, text, ms) -> el a small name label above the landmark / tile (DOM, crisp text); ms 0 = stays
+ *   sc.hideLabels()
  *   sc.destroy()
  *   sc.canvas
  *
  *   MR.render.drawPortrait(canvas, emotion)   Pip's big head (5 emotions) into any canvas
  *   MR.render.drawItemIcon(canvas, itemId)    item icon into any canvas
  *   MR.render.drawPip(canvas, facing)         a standing Pip (for small pictures)
+ *   MR.render.drawLandmarkIcon(canvas, type)  a landmark (or 'exit') fitted into any canvas (legend icons)
  */
 (function (root) {
   'use strict';
@@ -174,8 +182,8 @@
     var start = map.start || { x: 0, y: 0, facing: 'S' };
     var pip = { x: start.x, y: start.y, facing: start.facing || 'S', walking: false, frame: 0, hidden: !map.start, bumpT: 0 };
     var item = opts.item ? { id: opts.item.id, x: opts.item.x, y: opts.item.y, visible: true, pop: 0 } : null;
-    var trail = [], highlights = [], markers = [], particles = [], emote = null;
-    var clickFn = null, alive = true, raf = 0, scale = 1, t0 = performance.now(), now = 0;
+    var trail = [], highlights = [], markers = [], particles = [], emote = null, pings = [], labels = [];
+    var clickFn = null, lmClickFn = null, alive = true, raf = 0, scale = 1, t0 = performance.now(), now = 0;
     var fast = function () { return !!(MR.flags && MR.flags.fast); };
 
     function resize() {
@@ -187,11 +195,11 @@
       cv.style.width = (W * scale) + 'px';
       cv.style.height = (H * scale) + 'px';
     }
-    var onResize = function () { if (alive) resize(); };
+    var onResize = function () { if (alive) { resize(); placeLabels(); } };
     root.addEventListener('resize', onResize);
     resize();
     /* the container may get its size a frame later (flex layout) */
-    root.requestAnimationFrame(function () { if (alive) resize(); });
+    root.requestAnimationFrame(function () { if (alive) { resize(); placeLabels(); } });
 
     function tileFromEvent(ev) {
       var r = cv.getBoundingClientRect();
@@ -199,17 +207,78 @@
       return { x: Math.floor(sx / T), y: Math.floor((sy - PAD) / T) };
     }
     cv.addEventListener('pointerdown', function (ev) {
+      if (lmClickFn) { var lm = hitLandmark(ev.clientX, ev.clientY); if (lm) lmClickFn(lm, ev); }
       if (!clickFn) return;
       var t = tileFromEvent(ev);
       if (t.x < 0 || t.y < 0 || t.x >= map.cols || t.y >= map.rows) return;
       clickFn(t.x, t.y, ev);
     });
     cv.addEventListener('pointermove', function (ev) {
-      if (!clickFn || !highlights.length) { cv.style.cursor = ''; return; }
-      var t = tileFromEvent(ev), hit = false;
-      highlights.forEach(function (h) { (h.tiles || []).forEach(function (q) { if (q.x === t.x && q.y === t.y) hit = true; }); });
+      var hit = false;
+      if (clickFn && highlights.length) {
+        var t = tileFromEvent(ev);
+        highlights.forEach(function (h) { (h.tiles || []).forEach(function (q) { if (q.x === t.x && q.y === t.y) hit = true; }); });
+      }
+      if (!hit && lmClickFn) hit = !!hitLandmark(ev.clientX, ev.clientY);
       cv.style.cursor = hit ? 'pointer' : '';
     });
+
+    /* ---------------- landmarks: list, hit test, ping, labels */
+    function allLandmarks() {
+      var out = (map.landmarks || []).map(function (lm) { return { id: lm.id || lm.type, type: lm.type, x: lm.x, y: lm.y }; });
+      if (map.exit && opts.showExit !== false) out.push({ id: 'exit', type: 'exit', x: map.exit.x, y: map.exit.y });
+      return out;
+    }
+    function landmarkAt(x, y) {
+      var all = allLandmarks();
+      for (var i = 0; i < all.length; i++) if (all[i].x === x && all[i].y === y) return all[i];
+      return null;
+    }
+    /* the sprite's box in base pixels (falls back to the tile) */
+    function spriteBox(x, y) {
+      var lm = landmarkAt(x, y), box = { x: x * T, y: PAD + y * T, w: T, h: T };
+      if (!lm) return box;
+      var spr = lm.type === 'exit' ? S.landmark('exit', 0) : S.landmark(lm.type, 0, corridorOrient(map, lm.x, lm.y));
+      var bx = x * T + spr.ox, by = PAD + y * T + spr.oy, bw = spr.canvas.width, bh = spr.canvas.height;
+      var x0 = Math.min(box.x, bx), y0 = Math.min(box.y, by);
+      return { x: x0, y: y0, w: Math.max(box.x + T, bx + bw) - x0, h: Math.max(box.y + T, by + bh) - y0 };
+    }
+    function hitLandmark(clientX, clientY) {
+      var r = cv.getBoundingClientRect();
+      if (!r.width) return null;
+      var bx = (clientX - r.left) / (r.width / W), by = (clientY - r.top) / (r.height / H);
+      var all = allLandmarks().sort(function (a, b) { return b.y - a.y; });   /* the front one first */
+      for (var i = 0; i < all.length; i++) {
+        var b = spriteBox(all[i].x, all[i].y);
+        if (bx >= b.x && bx < b.x + b.w && by >= b.y && by < b.y + b.h) return all[i];
+      }
+      return null;
+    }
+    function placeLabel(lb) {
+      var box = spriteBox(lb.x, lb.y);
+      var cr = cv.getBoundingClientRect(), pr = container.getBoundingClientRect(), k = cr.width / W;
+      if (!k) return;
+      var left = cr.left - pr.left + container.scrollLeft + (box.x + box.w / 2) * k;
+      var top = cr.top - pr.top + container.scrollTop + box.y * k - 4;
+      /* keep the whole label inside the box (it is centred on `left`) */
+      var half = lb.el.offsetWidth / 2, maxX = container.clientWidth + container.scrollLeft - half - 2;
+      left = Math.max(container.scrollLeft + half + 2, Math.min(maxX, left));
+      lb.el.style.left = Math.round(left) + 'px';
+      lb.el.style.top = Math.round(top) + 'px';
+      /* no room above (top row), or it would cover Pip: put it under the landmark instead */
+      var lh = lb.el.offsetHeight / k, lw = lb.el.offsetWidth / k, lx = box.x + box.w / 2 - lw / 2, ly = box.y - 4 / k - lh;
+      var px0 = pip.x * T, py0 = PAD + pip.y * T - 6;
+      var onPip = !pip.hidden && lx < px0 + T && lx + lw > px0 && ly < py0 + 22 && ly + lh > py0;
+      var below = top - lb.el.offsetHeight < 2 || onPip;
+      lb.el.classList.toggle('is-below', below);
+      if (below) lb.el.style.top = Math.round(cr.top - pr.top + container.scrollTop + (box.y + box.h) * k + 4) + 'px';
+    }
+    function placeLabels() { labels.forEach(placeLabel); }
+    function removeLabel(lb) {
+      clearTimeout(lb.timer);
+      if (lb.el.parentNode) lb.el.parentNode.removeChild(lb.el);
+      var i = labels.indexOf(lb); if (i >= 0) labels.splice(i, 1);
+    }
 
     /* ---------------- drawing */
     function drawEntitySprite(spr, tx, ty) { g.drawImage(spr.canvas, Math.round(tx * T + spr.ox), Math.round(PAD + ty * T + spr.oy)); }
@@ -299,6 +368,33 @@
         }
       });
     }
+    /* a blinking yellow frame around the landmark + a bouncing arrow above it */
+    function drawPings() {
+      for (var i = pings.length - 1; i >= 0; i--) {
+        var p = pings[i];
+        if (now > p.until) { pings.splice(i, 1); continue; }
+        var b = spriteBox(p.x, p.y), t = now - p.start;
+        var on = Math.floor(t / 260) % 2 === 0;
+        var grow = 1 + Math.round((Math.sin(t / 130) + 1) * 1.5);
+        var x0 = b.x - grow, y0 = b.y - grow, w = b.w + grow * 2, h = b.h + grow * 2;
+        var col = on ? (p.color || '#ffd84a') : '#ffffff';
+        px(g, x0 - 1, y0 - 1, w + 2, 4, '#3a2830'); px(g, x0 - 1, y0 + h - 3, w + 2, 4, '#3a2830');
+        px(g, x0 - 1, y0 - 1, 4, h + 2, '#3a2830'); px(g, x0 + w - 3, y0 - 1, 4, h + 2, '#3a2830');
+        px(g, x0, y0, w, 2, col); px(g, x0, y0 + h - 2, w, 2, col); px(g, x0, y0, 2, h, col); px(g, x0 + w - 2, y0, 2, h, col);
+        /* arrow pointing down at it (or up from below when there is no room on top) */
+        var cx = Math.round(b.x + b.w / 2), bob = Math.round(Math.abs(Math.sin(t / 160)) * 3);
+        var up = y0 - 12 < 0, ay = up ? y0 + h + 3 + bob : y0 - 4 - bob;
+        /* row r of the arrow: widest at the far end, the tip toward the landmark */
+        for (var r = 0; r < 4; r++) {
+          var half = 3 - r, yy = up ? ay + 3 - r : ay - 3 + r;
+          px(g, cx - half - 1, yy - 1, half * 2 + 3, 3, '#3a2830');
+        }
+        for (r = 0; r < 4; r++) {
+          var hw = 3 - r, y2 = up ? ay + 3 - r : ay - 3 + r;
+          px(g, cx - hw, y2, hw * 2 + 1, 1, col);
+        }
+      }
+    }
     function drawParticles(dt) {
       for (var i = particles.length - 1; i >= 0; i--) {
         var p = particles[i];
@@ -350,6 +446,7 @@
         if (item && item.y === y) drawItem();
         if (pipRow === y) { drawPipSprite(); drawFacingArrow(); }
       }
+      drawPings();
       drawMarkers();
       drawParticles(dt);
       drawEmote();
@@ -438,8 +535,35 @@
         });
       },
       setItemVisible: function (on) { if (item) item.visible = !!on; },
-      resize: resize,
+      resize: function () { if (alive) { resize(); placeLabels(); } },
       scale: function () { return scale; },
+      landmarks: function () { return allLandmarks(); },
+      landmarkAt: function (x, y) { return landmarkAt(x, y); },
+      hitLandmark: function (clientX, clientY) { return hitLandmark(clientX, clientY); },
+      onLandmarkClick: function (fn) { lmClickFn = fn || null; },
+      /** Make a landmark (or a tile) blink for ms (default 2400). A new ping on the same tile restarts it. */
+      ping: function (x, y, o) {
+        o = o || {};
+        pings = pings.filter(function (p) { return p.x !== x || p.y !== y; });
+        pings.push({ x: x, y: y, start: now, until: now + (o.ms || 2400), color: o.color });
+      },
+      /** Name label above a landmark / tile. One label per tile (a new one replaces it). ms 0 = until hideLabels(). */
+      showLabel: function (x, y, text, ms) {
+        if (!alive) return null;
+        labels.filter(function (l) { return l.x === x && l.y === y; }).forEach(removeLabel);
+        if (root.getComputedStyle && root.getComputedStyle(container).position === 'static') container.style.position = 'relative';
+        var el = doc.createElement('span');
+        el.className = 'mr-maplabel';
+        el.textContent = String(text || '');
+        el.setAttribute('role', 'status');
+        container.appendChild(el);
+        var lb = { x: x, y: y, el: el, timer: 0 };
+        labels.push(lb);
+        placeLabel(lb);
+        if (ms !== 0) lb.timer = setTimeout(function () { removeLabel(lb); }, ms || 2600);
+        return el;
+      },
+      hideLabels: function () { labels.slice().forEach(removeLabel); },
       tileRect: function (x, y) {
         var r = cv.getBoundingClientRect(), k = r.width / W;
         return { left: r.left + x * T * k, top: r.top + (PAD + y * T) * k, width: T * k, height: T * k };
@@ -449,11 +573,13 @@
       /** For tests / debugging: what is on screen now. */
       debugState: function () {
         return { pip: { x: pip.x, y: pip.y, facing: pip.facing, walking: pip.walking }, highlights: highlights.map(function (h) { return { id: h.id, tiles: h.tiles }; }),
-          markers: markers.length, item: item ? { visible: item.visible } : null, trail: trail.length, emote: emote && emote.kind };
+          markers: markers.length, item: item ? { visible: item.visible } : null, trail: trail.length, emote: emote && emote.kind,
+          pings: pings.map(function (p) { return { x: p.x, y: p.y }; }), labels: labels.map(function (l) { return { x: l.x, y: l.y, text: l.el.textContent }; }) };
       },
       destroy: function () {
         var i = render.active.indexOf(sc); if (i >= 0) render.active.splice(i, 1);
         alive = false; root.cancelAnimationFrame(raf); root.removeEventListener('resize', onResize);
+        labels.slice().forEach(removeLabel); pings = []; lmClickFn = null;
         if (cv.parentNode) cv.parentNode.removeChild(cv);
       }
     };
@@ -475,5 +601,23 @@
   render.drawPortrait = function (canvas, emotion) { if (canvas) blit(canvas, S.portrait(emotion)); };
   render.drawItemIcon = function (canvas, itemId) { if (canvas) blit(canvas, S.item(itemId)); };
   render.drawPip = function (canvas, facing) { if (canvas) blit(canvas, S.pip(facing || 'S', 0)); };
+  /** A landmark ('fountain', 'red_door', ... or 'exit') fitted into a small canvas (whole pixels when it fits). */
+  render.drawLandmarkIcon = function (canvas, type) {
+    if (!canvas) return;
+    var spr = S.landmark(type, 0, type === 'bridge' ? 'ew' : undefined).canvas;
+    var ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (type === 'bridge') {                       /* the deck is part of the ground: draw a little bit of water + deck */
+      var gc = doc.createElement('canvas'); gc.width = T; gc.height = T;
+      drawBridgeDeck(gc.getContext('2d'), 0, 0, 'ew');
+      var kb = Math.max(1, Math.floor(Math.min(canvas.width / T, canvas.height / T)));
+      ctx.drawImage(gc, Math.floor((canvas.width - T * kb) / 2), Math.floor((canvas.height - T * kb) / 2), T * kb, T * kb);
+    }
+    var k = Math.min(canvas.width / spr.width, canvas.height / spr.height);
+    if (k >= 1) k = Math.floor(k);
+    var w = Math.round(spr.width * k), h = Math.round(spr.height * k);
+    ctx.drawImage(spr, Math.floor((canvas.width - w) / 2), Math.floor((canvas.height - h) / 2), w, h);
+  };
   render.TILE = T; render.PAD = PAD_DEFAULT;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -75,12 +75,18 @@ MR.log.askTurn / goChoice / guideTurn / hint / event / lockStage / aggregate / t
   not as a pupil error). Two failures in a row → offline rules for the rest of the session.
 * Only the pupil's sentence and the fact table are sent. Never the class number.
 
-## Left / right rule (Guide)
+## Left / right rule
 
-"left" / "right" always mean **Pip's** left / right. When Pip faces the viewer (down the screen), Pip's left
-is the pupil's right, so the first unqualified turn in that position (once per route) makes Pip ask
-"My left or your left?". "your left" = Pip's left; "my left" = the pupil's left (mirrored, and Pip says
-"OK! Your left is my right now."). A yellow chevron on the map always shows where Pip is looking.
+"left" / "right" mean **Pip's** left / right, the way directions work for the walker.
+
+* **Warm-up:** Pip always walks away from the viewer, so the pupil's left and Pip's left are the same.
+  A warm-up answer never depends on whose left is meant (Pip cannot ask back there). A unit test enforces this.
+* **Guide:** when Pip faces the viewer (down the screen), "left" can mean two things (spec 4.4). The first
+  unqualified turn in that position makes Pip ask "My left or your left?" and wait.
+  "your left" = Pip's left; "my left" = the pupil's left (mirrored; the first time Pip says
+  "OK! Your left is my right now."). **Pip remembers the answer for the rest of the route** and never asks
+  again or silently switches meaning. Facing left / right (E / W), a turn is Pip's own turn.
+* A yellow chevron on the map always shows where Pip is looking.
 
 ## Pip's voice (offline)
 
@@ -95,6 +101,10 @@ is the pupil's right, so the first unqualified turn in that position (once per r
 * Speech **input** uses the browser's recogniser (the recognised text goes into the box for the pupil to
   check). Note: Chrome's recogniser sends audio to Google (open question in spec §7). Turn it off with
   `speechInput: false` in `config.local.js`; typing always works.
+* **Microphone permission:** Chrome does not remember permissions for pages opened as files (`file://`),
+  so it asks on every Speak. `start-mac.command` / `start-windows.bat` serve the game from
+  `http://localhost:8787/` (server/proxy.js, bound to 127.0.0.1), where "Allow on every visit" is kept.
+  The relay also reads `apiKey` from `config.local.js` on the server side, so the key never reaches the browser.
 
 ## Debug deeplinks
 
@@ -113,7 +123,7 @@ Other flags: `fast=1` (no typing effect, instant walking, no voice), `offline=1`
 ## Tests
 
 ```
-npm test             # 52 unit tests (Node, pure logic)
+npm test             # 56 unit tests (Node: pure logic + relay)
 npm run test:e2e     # full playthrough in headless Chromium, network blocked (141 checks)
 node tools/shot.js "?debug=go&item=1" out.png    # screenshot helper
 ```

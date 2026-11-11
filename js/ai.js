@@ -105,6 +105,9 @@
     'right say see sentence should size so something sorry step steps stop straight sure talk task tell that the then there ' +
     'thing things think this to too try turn understand until us wall want way we what where which will with word words yes you your yours')
     .split(' ').reduce(function (m, w) { m[w] = true; return m; }, {});
+  /* safety net: no word that could give away a fact of ANY game (all 8 things, all looks, all places) is ever allowed */
+  (MR.data.factWords || []).forEach(function (w) { delete ALLOWED[w]; });
+  ai.isAllowedWord = function (w) { return !!ALLOWED[String(w).toLowerCase()]; };
   ai.MAX_REPLY_CHARS = 120;
 
   /**

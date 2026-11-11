@@ -1,5 +1,7 @@
-/* Maze Rescue - closed game data: fact table, Go maps, Guide mazes, warm-up questions, hints, canned lines.
+/* Maze Rescue - closed game data: things, Go maps, Guide mazes, warm-up questions, hints, canned lines.
  * Pure (no DOM). Requires core.js and maze.js. Everything Pip may ever "know" is in this file.
+ * Each game is different: a per-game seed picks the things, their looks, the Go maps, the warm-up and the Guide
+ * maze variants (see "the game's own content" below). Every sentence that can come out is still from this file.
  * All pupil-facing text is English at about A2 level. */
 (function (root) {
   'use strict';
@@ -45,80 +47,127 @@
     return t ? t.name : String(type || '').replace(/_/g, ' ');
   };
 
-  /* ------------------------------------------------------------------ fact table (closed, spec 5.1) */
-  data.items = [
-    {
-      id: 'key', name: 'a key', noun: 'key',
-      look: 'It is small and yellow.',
-      place: 'It is behind the red door, next to the blue fountain.',
-      junctions: [
-        { clue: 'the red door', options: ['red door', 'green door'], correct: 0 },
-        { clue: 'next to the blue fountain', options: ['fountain path', 'tree path', 'bridge path'], correct: 0 }
-      ]
-    },
-    {
-      id: 'map', name: 'a map', noun: 'map',
-      look: 'It is old and brown.',
-      place: 'It is opposite the windmill, in front of the big tree.',
-      junctions: [
-        { clue: 'opposite the windmill', options: ['windmill path', 'scarecrow path'], correct: 0 },
-        { clue: 'in front of the big tree', options: ['tree path', 'well path', 'bench path'], correct: 0 }
-      ]
-    },
-    {
-      id: 'lamp', name: 'a lamp', noun: 'lamp',
-      look: 'It is red and very bright.',
-      place: 'It is between the big tree and the well, behind the green door.',
-      junctions: [
-        { clue: 'between the big tree and the well', options: ['path between the tree and the well', 'scarecrow path', 'windmill path'], correct: 0 },
-        { clue: 'behind the green door', options: ['green door', 'red door'], correct: 0 }
-      ]
-    },
-    {
-      id: 'bag', name: 'a bag', noun: 'bag',
-      look: 'It is big and green.',
-      place: 'It is next to the scarecrow, opposite the bench.',
-      junctions: [
-        { clue: 'next to the scarecrow', options: ['scarecrow path', 'tree path'], correct: 0 },
-        { clue: 'opposite the bench', options: ['bench path', 'fountain path', 'bridge path'], correct: 0 }
-      ]
-    }
-  ];
-  data.itemIds = data.items.map(function (it) { return it.id; });
-  data.FACTS = ['name', 'look', 'place'];
-  data.getItem = function (idOrIndex) {
-    if (typeof idOrIndex === 'number') return data.items[idOrIndex] || null;
-    for (var i = 0; i < data.items.length; i++) if (data.items[i].id === idOrIndex) return data.items[i];
+  data.SOLID_TYPES = ['fountain', 'tree', 'windmill', 'scarecrow', 'well', 'bench'];
+  data.DOOR_TYPES = ['red_door', 'green_door'];
+  /* landmarks that are low enough that Pip stays visible when he stands just above (behind) them */
+  var LOW_TYPES = ['fountain', 'well', 'bench'];
+  data.LOW_TYPES = LOW_TYPES;
+  /* landmarks no wider than a tile (the tree and the windmill reach about half a tile to each side) */
+  var NARROW_TYPES = LOW_TYPES.concat(['scarecrow']);
+  data.NARROW_TYPES = NARROW_TYPES;
+  /**
+   * What a solid landmark spot allows, so that Pip is never hidden behind a landmark:
+   *   'low'    a path tile just above it: a tall landmark (tree, windmill, scarecrow) would be drawn over Pip there
+   *   'narrow' a path tile diagonally above it: the tree's leaves / the windmill's sails would cover half of Pip
+   *   null     anything
+   * tiles = the map's rows ('.' = path).
+   */
+  function spotNeed(tiles, x, y) {
+    var up = tiles[y - 1] || '';
+    if (up.charAt(x) === '.') return 'low';
+    if (up.charAt(x - 1) === '.' || up.charAt(x + 1) === '.') return 'narrow';
     return null;
-  };
-  /** The ONLY text Pip may use to give a fact. fact: 'name' | 'look' | 'place'. */
-  data.factText = function (itemId, fact) {
-    var it = data.getItem(itemId);
-    if (!it) return '';
-    if (fact === 'name') return 'I need ' + it.name + '.';
-    return it[fact] || '';
-  };
-
-  /* ------------------------------------------------------------------ Go maps (one per item) */
-  function goMap(def) {
-    maze.prepare(def);
-    var item = data.getItem(def.itemId);
-    def.approach = maze.findPath(def, def.start, def.junctions[0].at).slice(1);
-    def.junctions.forEach(function (j, ji) {
-      var fact = item.junctions[ji];
-      j.index = ji; j.clue = fact.clue; j.correct = fact.correct;
-      j.branches.forEach(function (b, bi) {
-        b.option = bi; b.label = fact.options[bi]; b.correct = bi === fact.correct;
-        b.path = maze.findPath(def, j.at, b.end).slice(1);
+  }
+  function allows(need, type) {
+    return need === 'low' ? LOW_TYPES.indexOf(type) >= 0 : (need === 'narrow' ? NARROW_TYPES.indexOf(type) >= 0 : true);
+  }
+  /** Solid landmark types for a list of spots (each {need}) from a shuffled list of types: 'low' spots are filled first,
+   *  then 'narrow' spots, then the rest, each time with the first type in the shuffled order that the spot allows.
+   *  (Every map has few enough 'low' / 'narrow' spots for this to work; a unit test checks it for many seeds.) */
+  function fitSolids(spots, shuffled) {
+    var out = [], used = {};
+    ['low', 'narrow', null].forEach(function (pass) {
+      spots.forEach(function (sp, i) {
+        if (sp.need !== pass) return;
+        for (var k = 0; k < shuffled.length; k++) {
+          if (!used[k] && allows(sp.need, shuffled[k])) { used[k] = true; out[i] = shuffled[k]; return; }
+        }
+        for (k = 0; k < shuffled.length; k++) if (!used[k]) { used[k] = true; out[i] = shuffled[k]; return; }   /* never needed */
       });
     });
-    return def;
+    return out;
   }
-  /* Branch order == option order in the fact table. `landmarks` lists the landmark ids that mark the branch.
-   * The correct branch of junction 0 ends at junction 1; the correct branch of junction 1 ends at `pickupFrom`. */
-  data.goMaps = {
-    key: goMap({
-      id: 'go_key', itemId: 'key',
+  /** True when every type of `solids` is allowed in its spot. */
+  function solidsFit(spots, solids) {
+    for (var i = 0; i < spots.length; i++) if (!allows(spots[i].need, solids[i])) return false;
+    return true;
+  }
+  function phrase(type) { return data.landmarkTypes[type].phrase; }
+  function copyXY(p) { return p ? { x: p.x, y: p.y } : null; }
+
+  /* ------------------------------------------------------------------ seeded random numbers */
+  /** Small seeded PRNG (mulberry32). The same seed always gives the same numbers, in the browser and in Node.
+   *  @returns {{next():number, int(n):number, pick(arr), shuffle(arr):Array, bool():boolean}} */
+  data.rng = function (seed) {
+    var a = seed >>> 0;
+    function next() {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+    return {
+      next: next,
+      int: function (n) { return Math.floor(next() * n); },
+      pick: function (arr) { return arr[Math.floor(next() * arr.length)]; },
+      shuffle: function (arr) {
+        var out = arr.slice();
+        for (var i = out.length - 1; i > 0; i--) { var j = Math.floor(next() * (i + 1)), t = out[i]; out[i] = out[j]; out[j] = t; }
+        return out;
+      },
+      bool: function () { return next() < 0.5; }
+    };
+  };
+  /** A fresh random 32-bit seed for a new game. */
+  data.newSeed = function () { return Math.floor(Math.random() * 4294967296) >>> 0; };
+  /** A stable 32-bit seed from any text (e.g. a class number for example evidence). */
+  data.seedFromText = function (s) {
+    var h = 2166136261;
+    s = String(s);
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  };
+
+  /* ------------------------------------------------------------------ the things Pip may need (closed pool) */
+  data.FACTS = ['name', 'look', 'place'];
+  data.ITEM_COUNT = 4;
+  data.SIZES = ['small', 'big'];
+  data.COLOURS = ['red', 'blue', 'green', 'yellow', 'brown', 'pink', 'purple', 'orange'];
+  /** Eight common things that are easy to draw. Each game uses four of them. `colour` = the colour when no game is on. */
+  data.POOL = [
+    { id: 'key',  noun: 'key',  name: 'a key',  sizes: ['small'],        colour: 'yellow' },
+    { id: 'map',  noun: 'map',  name: 'a map',  sizes: ['small', 'big'], colour: 'brown' },
+    { id: 'lamp', noun: 'lamp', name: 'a lamp', sizes: ['small', 'big'], colour: 'red' },
+    { id: 'bag',  noun: 'bag',  name: 'a bag',  sizes: ['small', 'big'], colour: 'green' },
+    { id: 'book', noun: 'book', name: 'a book', sizes: ['small', 'big'], colour: 'blue' },
+    { id: 'ball', noun: 'ball', name: 'a ball', sizes: ['small', 'big'], colour: 'orange' },
+    { id: 'hat',  noun: 'hat',  name: 'a hat',  sizes: ['small', 'big'], colour: 'purple' },
+    { id: 'cup',  noun: 'cup',  name: 'a cup',  sizes: ['small', 'big'], colour: 'pink' }
+  ];
+  data.POOL.forEach(function (p) { p.colours = data.COLOURS; });
+  data.poolIds = data.POOL.map(function (p) { return p.id; });
+  function poolItem(id) {
+    for (var i = 0; i < data.POOL.length; i++) if (data.POOL[i].id === id) return data.POOL[i];
+    return null;
+  }
+  function lookText(size, colour) { return 'It is ' + size + ' and ' + colour + '.'; }
+
+  /* ------------------------------------------------------------------ Go map templates
+   * Four hand-made map shapes. Each has 2 junctions. A branch has landmark SLOTS:
+   *   kind 'door'  : a door on a path tile (red / green door)
+   *   kind 'solid' : a solid landmark on the lawn beside the branch (fountain, tree, windmill, scarecrow, well, bench)
+   *   kind 'bridge': the bridge over water (always the bridge)
+   * Junction 1's correct branch is fixed by the shape (it leads to junction 2). At junction 2 every branch with an
+   * `item` spot may hold the thing; the place sentence uses `prep` and is TRUE for whichever branch is chosen:
+   *   'next to'     the landmark touches the thing
+   *   'in front of' the thing is just below (nearer the viewer than) the landmark
+   *   'opposite'    landmark - path - thing in one line (across the path)
+   *   'behind'      the door is on the way, the thing is past it
+   *   'between'     (junction 1 only) the branch runs between the two landmarks */
+  var TEMPLATES = {
+    A: {
+      id: 'A',
       tiles: [
         '###############',
         '#######.#######',
@@ -132,20 +181,19 @@
         '##########.####',
         '###############'
       ],
-      landmarks: [
-        { id: 'red_door', type: 'red_door', x: 9, y: 8 }, { id: 'green_door', type: 'green_door', x: 11, y: 8 },
-        { id: 'fountain', type: 'fountain', x: 2, y: 3 }, { id: 'tree', type: 'tree', x: 6, y: 1 },
-        { id: 'bridge', type: 'bridge', x: 9, y: 5 }
-      ],
       start: { x: 10, y: 9, facing: 'N' },
-      item: { x: 3, y: 3 }, pickupFrom: { x: 3, y: 3 },
-      junctions: [
-        { at: { x: 10, y: 8 }, branches: [{ end: { x: 7, y: 5 }, landmarks: ['red_door'] }, { end: { x: 13, y: 6 }, landmarks: ['green_door'] }] },
-        { at: { x: 7, y: 5 }, branches: [{ end: { x: 3, y: 3 }, landmarks: ['fountain'] }, { end: { x: 7, y: 1 }, landmarks: ['tree'] }, { end: { x: 11, y: 3 }, landmarks: ['bridge'] }] }
+      j: [
+        { at: { x: 10, y: 8 }, prep: 'behind', correct: 0, branches: [
+          { end: { x: 7, y: 5 }, slots: [{ x: 9, y: 8, kind: 'door' }] },
+          { end: { x: 13, y: 6 }, slots: [{ x: 11, y: 8, kind: 'door' }] }] },
+        { at: { x: 7, y: 5 }, prep: 'next to', branches: [
+          { end: { x: 3, y: 3 }, slots: [{ x: 2, y: 3, kind: 'solid' }], item: { x: 3, y: 3 } },
+          { end: { x: 7, y: 1 }, slots: [{ x: 6, y: 1, kind: 'solid' }], item: { x: 7, y: 1 } },
+          { end: { x: 11, y: 3 }, slots: [{ x: 9, y: 5, kind: 'bridge' }] }] }
       ]
-    }),
-    map: goMap({
-      id: 'go_map', itemId: 'map',
+    },
+    B: {
+      id: 'B',
       tiles: [
         '###############',
         '###############',
@@ -159,19 +207,19 @@
         '####.##########',
         '###############'
       ],
-      landmarks: [
-        { id: 'windmill', type: 'windmill', x: 8, y: 7 }, { id: 'scarecrow', type: 'scarecrow', x: 2, y: 7 },
-        { id: 'tree', type: 'tree', x: 7, y: 1 }, { id: 'well', type: 'well', x: 3, y: 2 }, { id: 'bench', type: 'bench', x: 11, y: 2 }
-      ],
       start: { x: 4, y: 9, facing: 'N' },
-      item: { x: 7, y: 2 }, pickupFrom: { x: 7, y: 2 },
-      junctions: [
-        { at: { x: 4, y: 8 }, branches: [{ end: { x: 7, y: 5 }, landmarks: ['windmill'] }, { end: { x: 1, y: 6 }, landmarks: ['scarecrow'] }] },
-        { at: { x: 7, y: 5 }, branches: [{ end: { x: 7, y: 2 }, landmarks: ['tree'] }, { end: { x: 3, y: 3 }, landmarks: ['well'] }, { end: { x: 11, y: 3 }, landmarks: ['bench'] }] }
+      j: [
+        { at: { x: 4, y: 8 }, prep: 'opposite', correct: 0, branches: [
+          { end: { x: 7, y: 5 }, slots: [{ x: 8, y: 7, kind: 'solid' }] },
+          { end: { x: 1, y: 6 }, slots: [{ x: 2, y: 7, kind: 'solid' }] }] },
+        { at: { x: 7, y: 5 }, prep: 'in front of', branches: [
+          { end: { x: 7, y: 2 }, slots: [{ x: 7, y: 1, kind: 'solid' }], item: { x: 7, y: 2 } },
+          { end: { x: 3, y: 3 }, slots: [{ x: 3, y: 2, kind: 'solid' }], item: { x: 3, y: 3 } },
+          { end: { x: 11, y: 3 }, slots: [{ x: 11, y: 2, kind: 'solid' }], item: { x: 11, y: 3 } }] }
       ]
-    }),
-    lamp: goMap({
-      id: 'go_lamp', itemId: 'lamp',
+    },
+    C: {
+      id: 'C',
       tiles: [
         '###############',
         '###.#######.###',
@@ -185,20 +233,19 @@
         '#######.#######',
         '###############'
       ],
-      landmarks: [
-        { id: 'tree', type: 'tree', x: 6, y: 5 }, { id: 'well', type: 'well', x: 8, y: 5 },
-        { id: 'scarecrow', type: 'scarecrow', x: 2, y: 5 }, { id: 'windmill', type: 'windmill', x: 12, y: 5 },
-        { id: 'green_door', type: 'green_door', x: 9, y: 3 }, { id: 'red_door', type: 'red_door', x: 5, y: 3 }
-      ],
       start: { x: 7, y: 9, facing: 'N' },
-      item: { x: 11, y: 1 }, pickupFrom: { x: 11, y: 1 },
-      junctions: [
-        { at: { x: 7, y: 7 }, branches: [{ end: { x: 7, y: 3 }, landmarks: ['tree', 'well'] }, { end: { x: 1, y: 5 }, landmarks: ['scarecrow'] }, { end: { x: 13, y: 5 }, landmarks: ['windmill'] }] },
-        { at: { x: 7, y: 3 }, branches: [{ end: { x: 11, y: 1 }, landmarks: ['green_door'] }, { end: { x: 3, y: 1 }, landmarks: ['red_door'] }] }
+      j: [
+        { at: { x: 7, y: 7 }, prep: 'between', correct: 0, branches: [
+          { end: { x: 7, y: 3 }, slots: [{ x: 6, y: 5, kind: 'solid' }, { x: 8, y: 5, kind: 'solid' }] },
+          { end: { x: 1, y: 5 }, slots: [{ x: 2, y: 5, kind: 'solid' }] },
+          { end: { x: 13, y: 5 }, slots: [{ x: 12, y: 5, kind: 'solid' }] }] },
+        { at: { x: 7, y: 3 }, prep: 'behind', branches: [
+          { end: { x: 11, y: 1 }, slots: [{ x: 9, y: 3, kind: 'door' }], item: { x: 11, y: 1 } },
+          { end: { x: 3, y: 1 }, slots: [{ x: 5, y: 3, kind: 'door' }], item: { x: 3, y: 1 } }] }
       ]
-    }),
-    bag: goMap({
-      id: 'go_bag', itemId: 'bag',
+    },
+    D: {
+      id: 'D',
       tiles: [
         '###############',
         '##########.####',
@@ -212,23 +259,133 @@
         '#######.#######',
         '###############'
       ],
-      landmarks: [
-        { id: 'scarecrow', type: 'scarecrow', x: 8, y: 3 }, { id: 'tree', type: 'tree', x: 12, y: 3 },
-        { id: 'bench', type: 'bench', x: 10, y: 7 }, { id: 'fountain', type: 'fountain', x: 2, y: 7 },
-        { id: 'bridge', type: 'bridge', x: 7, y: 7 }
-      ],
       start: { x: 10, y: 1, facing: 'S' },
-      item: { x: 12, y: 7 }, pickupFrom: { x: 11, y: 7 },
-      junctions: [
-        { at: { x: 10, y: 2 }, branches: [{ end: { x: 7, y: 5 }, landmarks: ['scarecrow'] }, { end: { x: 13, y: 4 }, landmarks: ['tree'] }] },
-        { at: { x: 7, y: 5 }, branches: [{ end: { x: 11, y: 7 }, landmarks: ['bench'] }, { end: { x: 3, y: 7 }, landmarks: ['fountain'] }, { end: { x: 7, y: 9 }, landmarks: ['bridge'] }] }
+      j: [
+        { at: { x: 10, y: 2 }, prep: 'next to', correct: 0, branches: [
+          { end: { x: 7, y: 5 }, slots: [{ x: 8, y: 3, kind: 'solid' }] },
+          { end: { x: 13, y: 4 }, slots: [{ x: 12, y: 3, kind: 'solid' }] }] },
+        { at: { x: 7, y: 5 }, prep: 'opposite', branches: [
+          { end: { x: 11, y: 7 }, slots: [{ x: 10, y: 7, kind: 'solid' }], item: { x: 12, y: 7 } },
+          { end: { x: 3, y: 7 }, slots: [{ x: 2, y: 7, kind: 'solid' }], item: { x: 4, y: 7 } },
+          { end: { x: 7, y: 9 }, slots: [{ x: 7, y: 7, kind: 'bridge' }] }] }
       ]
-    })
+    }
   };
-  data.goMap = function (itemIdOrIndex) {
-    var it = data.getItem(itemIdOrIndex);
-    return it ? data.goMaps[it.id] : null;
-  };
+  data.TEMPLATE_IDS = ['A', 'B', 'C', 'D'];
+  data.goTemplates = TEMPLATES;
+  function slotCount(tpl, kind) {
+    var n = 0;
+    tpl.j.forEach(function (J) { J.branches.forEach(function (B) { B.slots.forEach(function (s) { if (s.kind === kind) n++; }); }); });
+    return n;
+  }
+  /** The solid slots of a template in slot order, each {x, y, low}. */
+  function solidSpots(tpl) {
+    var out = [];
+    tpl.j.forEach(function (J) { J.branches.forEach(function (B) { B.slots.forEach(function (s) {
+      if (s.kind === 'solid') out.push({ x: s.x, y: s.y, need: spotNeed(tpl.tiles, s.x, s.y) });
+    }); }); });
+    return out;
+  }
+  /** Branch indexes of junction 2 that can hold the thing. */
+  function winnable(tpl) {
+    var out = [];
+    tpl.j[1].branches.forEach(function (B, i) { if (B.item) out.push(i); });
+    return out;
+  }
+  /** choice {doors:[type...], solids:[type...]} -> landmark types per junction, per branch, per slot (template order). */
+  function assignTypes(tpl, choice) {
+    var di = 0, si = 0;
+    return tpl.j.map(function (J) {
+      return J.branches.map(function (B) {
+        return B.slots.map(function (s) {
+          if (s.kind === 'door') return choice.doors[di++];
+          if (s.kind === 'solid') return choice.solids[si++];
+          return 'bridge';
+        });
+      });
+    });
+  }
+  function clause(prep, types) {
+    if (prep === 'between') return 'between ' + phrase(types[0]) + ' and ' + phrase(types[1]);
+    return prep + ' ' + phrase(types[0]);
+  }
+  function branchLabel(types) {
+    if (types.length > 1) return 'path between the ' + data.landmarkName(types[0]) + ' and the ' + data.landmarkName(types[1]);
+    return /_door$/.test(types[0]) ? data.landmarkName(types[0]) : data.landmarkName(types[0]) + ' path';
+  }
+  function placeText(tpl, types, win) {
+    return 'It is ' + clause(tpl.j[0].prep, types[0][tpl.j[0].correct]) + ', ' + clause(tpl.j[1].prep, types[1][win]) + '.';
+  }
+
+  /** Build one thing + its Go map from a template.
+   *  look: {size, colour, look}; choice: {doors, solids, win}. Returns {item, map}. */
+  function buildThing(p, look, tpl, choice) {
+    var types = assignTypes(tpl, choice), win = choice.win;
+    var correct = [tpl.j[0].correct, win];
+    var item = {
+      id: p.id, noun: p.noun, name: p.name,
+      size: look.size, colour: look.colour, look: look.look,
+      place: placeText(tpl, types, win),
+      template: tpl.id,
+      junctions: tpl.j.map(function (J, ji) {
+        return { clue: clause(J.prep, types[ji][correct[ji]]), options: types[ji].map(branchLabel), correct: correct[ji] };
+      })
+    };
+    var lms = [];
+    tpl.j.forEach(function (J, ji) {
+      J.branches.forEach(function (B, bi) {
+        B.slots.forEach(function (s, si) { var t = types[ji][bi][si]; lms.push({ id: t, type: t, x: s.x, y: s.y }); });
+      });
+    });
+    var wb = tpl.j[1].branches[win];
+    var def = {
+      id: 'go_' + p.id, itemId: p.id, template: tpl.id,
+      tiles: tpl.tiles.slice(), landmarks: lms,
+      start: { x: tpl.start.x, y: tpl.start.y, facing: tpl.start.facing },
+      item: copyXY(wb.item), pickupFrom: copyXY(wb.end),
+      junctions: tpl.j.map(function (J, ji) {
+        return { at: copyXY(J.at), branches: J.branches.map(function (B, bi) { return { end: copyXY(B.end), landmarks: types[ji][bi].slice() }; }) };
+      })
+    };
+    return { item: item, map: finishGoMap(def, item) };
+  }
+  /* Branch order == option order in the fact table. `landmarks` lists the landmark ids that mark the branch.
+   * The correct branch of junction 0 ends at junction 1; the correct branch of junction 1 ends at `pickupFrom`. */
+  function finishGoMap(def, item) {
+    maze.prepare(def);
+    def.approach = maze.findPath(def, def.start, def.junctions[0].at).slice(1);
+    def.junctions.forEach(function (j, ji) {
+      var fact = item.junctions[ji];
+      j.index = ji; j.clue = fact.clue; j.correct = fact.correct;
+      j.branches.forEach(function (b, bi) {
+        b.option = bi; b.label = fact.options[bi]; b.correct = bi === fact.correct;
+        b.path = maze.findPath(def, j.at, b.end).slice(1);
+      });
+    });
+    return def;
+  }
+
+  /* ------------------------------------------------------------------ the classic game (no seed)
+   * Used for a game saved before games were random (it has no seed) and as the default before a game starts.
+   * These are the original four things, word for word. */
+  var CLASSIC = [
+    { id: 'key', tpl: 'A', size: 'small', colour: 'yellow', look: 'It is small and yellow.',
+      choice: { doors: ['red_door', 'green_door'], solids: ['fountain', 'tree'], win: 0 } },
+    { id: 'map', tpl: 'B', size: 'big', colour: 'brown', look: 'It is old and brown.',
+      choice: { doors: [], solids: ['windmill', 'scarecrow', 'tree', 'well', 'bench'], win: 0 } },
+    { id: 'lamp', tpl: 'C', size: 'small', colour: 'red', look: 'It is red and very bright.',
+      choice: { doors: ['green_door', 'red_door'], solids: ['tree', 'well', 'scarecrow', 'windmill'], win: 0 } },
+    { id: 'bag', tpl: 'D', size: 'big', colour: 'green', look: 'It is big and green.',
+      choice: { doors: [], solids: ['scarecrow', 'tree', 'bench', 'fountain'], win: 0 } }
+  ];
+  function classicContent() {
+    var items = [], goMaps = {};
+    CLASSIC.forEach(function (c) {
+      var b = buildThing(poolItem(c.id), { size: c.size, colour: c.colour, look: c.look }, TEMPLATES[c.tpl], c.choice);
+      items.push(b.item); goMaps[c.id] = b.map;
+    });
+    return { seed: null, items: items, goMaps: goMaps, guide: null, warmup: null };
+  }
 
   /* ------------------------------------------------------------------ Guide mazes: 2 routes x 2 difficulties */
   function gm(def) { def.kind = 'guide'; return maze.prepare(def); }
@@ -253,7 +410,7 @@
           '###############'
         ],
         landmarks: [
-          { type: 'fountain', x: 1, y: 4 }, { type: 'tree', x: 8, y: 5 }, { type: 'windmill', x: 6, y: 1 },
+          { type: 'tree', x: 1, y: 4 }, { type: 'fountain', x: 8, y: 5 }, { type: 'windmill', x: 6, y: 1 },
           { type: 'bridge', x: 10, y: 1 }, { type: 'scarecrow', x: 4, y: 1 }, { type: 'well', x: 12, y: 8 }
         ],
         start: { x: 1, y: 9, facing: 'N' }, exit: { x: 14, y: 1 }
@@ -274,7 +431,7 @@
           '###############'
         ],
         landmarks: [
-          { type: 'fountain', x: 1, y: 4 }, { type: 'tree', x: 8, y: 5 }, { type: 'windmill', x: 6, y: 1 },
+          { type: 'tree', x: 1, y: 4 }, { type: 'fountain', x: 8, y: 5 }, { type: 'windmill', x: 6, y: 1 },
           { type: 'bridge', x: 10, y: 1 }, { type: 'well', x: 10, y: 3 }
         ],
         start: { x: 1, y: 9, facing: 'N' }, exit: { x: 14, y: 1 }
@@ -298,8 +455,8 @@
           '###############'
         ],
         landmarks: [
-          { type: 'bench', x: 13, y: 5 }, { type: 'red_door', x: 10, y: 4 }, { type: 'scarecrow', x: 6, y: 4 },
-          { type: 'tree', x: 7, y: 9 }, { type: 'fountain', x: 11, y: 8 }, { type: 'windmill', x: 4, y: 4 },
+          { type: 'bench', x: 13, y: 5 }, { type: 'red_door', x: 10, y: 4 }, { type: 'tree', x: 6, y: 4 },
+          { type: 'fountain', x: 7, y: 9 }, { type: 'scarecrow', x: 11, y: 8 }, { type: 'windmill', x: 4, y: 4 },
           { type: 'well', x: 9, y: 2 }
         ],
         start: { x: 13, y: 1, facing: 'S' }, exit: { x: 0, y: 8 }
@@ -320,79 +477,217 @@
           '###############'
         ],
         landmarks: [
-          { type: 'bench', x: 13, y: 5 }, { type: 'red_door', x: 10, y: 4 }, { type: 'scarecrow', x: 6, y: 4 },
-          { type: 'tree', x: 7, y: 9 }, { type: 'fountain', x: 10, y: 6 }
+          { type: 'bench', x: 13, y: 5 }, { type: 'red_door', x: 10, y: 4 }, { type: 'tree', x: 6, y: 4 },
+          { type: 'fountain', x: 7, y: 9 }, { type: 'scarecrow', x: 10, y: 6 }
         ],
         start: { x: 13, y: 1, facing: 'S' }, exit: { x: 0, y: 8 }
       })
     }
   };
-  /** route: 0 | 1 | 'r1' | 'r2'; difficulty: 'standard' (default) | 'simple'. */
-  data.guideMaze = function (route, difficulty) {
+
+  function baseGuideMaze(route, difficulty) {
     var id = typeof route === 'number' ? data.routeIds[route] : route;
     var r = data.guideMazes[id];
     return r ? (r[difficulty === 'simple' ? 'simple' : 'standard']) : null;
+  }
+  function solidCount(mz) {
+    return mz.landmarks.filter(function (lm) { return data.landmarkTypes[lm.type] && data.landmarkTypes[lm.type].solid; }).length;
+  }
+  /** Id of a maze variant: '<base id>~m<0|1>~p<one digit per solid landmark = index in SOLID_TYPES>', e.g. 'r1_standard~m1~p30152'. */
+  function variantId(base, v) { return base.id + '~m' + (v.mirror ? 1 : 0) + '~p' + v.perm.slice(0, solidCount(base)).join(''); }
+
+  var variantCache = {};
+  /**
+   * Any Guide maze from its id (the id is what the log stores as maze_id). 'r1_standard' -> the hand-made maze;
+   * 'r1_standard~m1~p30152' -> that maze mirrored left <-> right (m1) with the solid landmarks set to SOLID_TYPES[3], [0], ...
+   * in the order of the hand-made list. Doors and the bridge never change. Returns null for an unknown / broken id.
+   */
+  data.guideMazeById = function (id) {
+    var m = /^(r\d+)_(standard|simple)(?:~m([01])~p([0-9]*))?$/.exec(String(id || ''));
+    if (!m || !data.guideMazes[m[1]]) return null;
+    var base = data.guideMazes[m[1]][m[2]];
+    if (m[3] == null) return base;
+    if (variantCache[id]) return variantCache[id];
+    var digits = m[4].split('').map(Number), seen = {};
+    if (digits.length !== solidCount(base)) return null;
+    for (var i = 0; i < digits.length; i++) {
+      if (digits[i] >= data.SOLID_TYPES.length || seen[digits[i]]) return null;
+      seen[digits[i]] = true;
+    }
+    var mirror = m[3] === '1', W = base.cols, si = 0;
+    function mx(x) { return mirror ? W - 1 - x : x; }
+    function mf(f) { return mirror && (f === 'E' || f === 'W') ? (f === 'E' ? 'W' : 'E') : f; }
+    var def = {
+      id: id, routeId: base.routeId, difficulty: base.difficulty, baseId: base.id, mirrored: mirror,
+      tiles: base.tiles.map(function (row) { return mirror ? row.split('').reverse().join('') : row; }),
+      landmarks: base.landmarks.map(function (lm) {
+        var solid = data.landmarkTypes[lm.type].solid;
+        return { type: solid ? data.SOLID_TYPES[digits[si++]] : lm.type, x: mx(lm.x), y: lm.y };
+      }),
+      start: { x: mx(base.start.x), y: base.start.y, facing: mf(base.start.facing) },
+      exit: { x: mx(base.exit.x), y: base.exit.y }
+    };
+    variantCache[id] = gm(def);
+    return variantCache[id];
+  };
+  /** route: 0 | 1 | 'r1' | 'r2'; difficulty: 'standard' (default) | 'simple'.
+   *  During a game this is the game's own variant (mirrored or not, landmarks shuffled); otherwise the hand-made maze. */
+  data.guideMaze = function (route, difficulty) {
+    var base = baseGuideMaze(route, difficulty);
+    if (!base) return null;
+    var v = current.guide && current.guide[base.routeId];
+    if (!v) return base;
+    /* the game's order of the six solid types, fitted to this maze so that no landmark can hide Pip (spotNeed) */
+    var spots = base.landmarks.filter(function (lm) { return data.landmarkTypes[lm.type].solid; })
+      .map(function (lm) { return { need: spotNeed(base.tiles, lm.x, lm.y) }; });
+    var types = fitSolids(spots, v.perm.map(function (i) { return data.SOLID_TYPES[i]; }));
+    var perm = types.map(function (t) { return data.SOLID_TYPES.indexOf(t); });
+    return data.guideMazeById(variantId(base, { mirror: v.mirror, perm: perm }));
   };
 
   /* ------------------------------------------------------------------ warm-up (does NOT use the item facts) */
   function wm(tiles, landmarks, start) {
-    return maze.prepare({ id: 'warmup', tiles: tiles, landmarks: landmarks || [], start: start });
+    return maze.prepare({ id: 'warmup', tiles: tiles.slice(), landmarks: landmarks || [], start: start });
   }
   var T_UP = ['#######', '#.....#', '###.###', '###.###', '#######'];
-  var T_DOWN = ['#######', '###.###', '###.###', '#.....#', '#######'];
   var CROSS = ['#######', '###.###', '#.....#', '###.###', '###.###', '#######'];
   var LAWN = ['#######', '#,,,,,#', '#,,,,,#', '#,,,,,#', '#######'];
   var LAWN_PATH = ['#######', '#,,,,,#', '#.....#', '#,,,,,#', '#######'];
-  var L = [{ x: 2, y: 1 }, { x: 1, y: 1 }], R = [{ x: 4, y: 1 }, { x: 5, y: 1 }];
   var PREPS = ['next to', 'behind', 'in front of', 'between', 'opposite'];
   data.PREPOSITIONS = PREPS;
+  function lmName(t) { return 'the ' + data.landmarkName(t); }
 
   /* type 'path': read/hear `instruction`, click one of `options` (each a list of tiles). `approach` = tiles Pip walks first.
-   * type 'prep': look at the picture (Pip + landmarks on `map`), pick the word for the gap in `sentence`. */
-  data.warmup = [
-    { id: 'w_path_1', type: 'path', instruction: 'Turn left at the tree.',
-      map: wm(T_UP, [{ type: 'tree', x: 3, y: 0 }], { x: 3, y: 3, facing: 'N' }),
-      approach: [{ x: 3, y: 2 }, { x: 3, y: 1 }], options: [{ id: 'left', tiles: L }, { id: 'right', tiles: R }], correct: 0 },
-    { id: 'w_prep_1', type: 'prep', sentence: 'Pip is ___ the tree.',
-      map: wm(LAWN, [{ type: 'tree', x: 4, y: 2 }]), pip: { x: 3, y: 2, facing: 'S' },
-      options: ['next to', 'behind', 'between'], correct: 0 },
-    { id: 'w_path_2', type: 'path', instruction: 'Turn right at the fountain.',
-      map: wm(T_UP, [{ type: 'fountain', x: 3, y: 0 }], { x: 3, y: 3, facing: 'N' }),
-      approach: [{ x: 3, y: 2 }, { x: 3, y: 1 }], options: [{ id: 'left', tiles: L }, { id: 'right', tiles: R }], correct: 1 },
-    { id: 'w_prep_2', type: 'prep', sentence: 'Pip is ___ the fountain.',
-      map: wm(LAWN, [{ type: 'fountain', x: 3, y: 2 }]), pip: { x: 3, y: 1, facing: 'S' },
-      options: ['in front of', 'behind', 'opposite'], correct: 1 },
-    { id: 'w_path_3', type: 'path', instruction: 'Go straight. Do not turn.',
-      map: wm(CROSS, [], { x: 3, y: 4, facing: 'N' }),
+   *   Pip always walks AWAY from the viewer (facing N) here, so the pupil's left is Pip's left: a warm-up question can
+   *   never depend on whose left is meant (Pip cannot ask back in the warm-up). That question belongs to Guide.
+   * type 'prep': look at the picture (Pip + landmarks on `map`), pick the word for the gap in `sentence`.
+   *   Pictures are seen from the viewer: "behind" = further up the screen, "in front of" = further down.
+   *   `wrong` lists the words that are clearly false for the picture; two of them are offered with the right one. */
+  function tUp(instruction, landmarks, correct) {
+    return { type: 'path', instruction: instruction, map: wm(T_UP, landmarks, { x: 3, y: 3, facing: 'N' }),
+      approach: [{ x: 3, y: 2 }, { x: 3, y: 1 }],
+      options: [{ id: 'left', tiles: [{ x: 2, y: 1 }, { x: 1, y: 1 }] }, { id: 'right', tiles: [{ x: 4, y: 1 }, { x: 5, y: 1 }] }], correct: correct };
+  }
+  function cross(instruction, landmarks, correct) {
+    return { type: 'path', instruction: instruction, map: wm(CROSS, landmarks, { x: 3, y: 4, facing: 'N' }),
       approach: [{ x: 3, y: 3 }, { x: 3, y: 2 }],
-      options: [{ id: 'left', tiles: [{ x: 2, y: 2 }, { x: 1, y: 2 }] }, { id: 'straight', tiles: [{ x: 3, y: 1 }] }, { id: 'right', tiles: [{ x: 4, y: 2 }, { x: 5, y: 2 }] }], correct: 1 },
-    { id: 'w_prep_3', type: 'prep', sentence: 'Pip is ___ the windmill.',
-      map: wm(LAWN, [{ type: 'windmill', x: 3, y: 1 }]), pip: { x: 3, y: 2, facing: 'S' },
-      options: ['behind', 'next to', 'in front of'], correct: 2 },
-    { id: 'w_path_4', type: 'path', instruction: 'Take the path next to the windmill.',
-      map: wm(T_UP, [{ type: 'windmill', x: 5, y: 2 }, { type: 'scarecrow', x: 1, y: 2 }], { x: 3, y: 3, facing: 'N' }),
-      approach: [{ x: 3, y: 2 }, { x: 3, y: 1 }], options: [{ id: 'left', tiles: L }, { id: 'right', tiles: R }], correct: 1 },
-    { id: 'w_prep_4', type: 'prep', sentence: 'Pip is ___ the tree and the well.',
-      map: wm(LAWN, [{ type: 'tree', x: 2, y: 2 }, { type: 'well', x: 4, y: 2 }]), pip: { x: 3, y: 2, facing: 'S' },
-      options: ['between', 'opposite', 'behind'], correct: 0 },
-    { id: 'w_path_5', type: 'path', instruction: 'Turn left at the well.',
-      note: 'Pip is looking at you. Pip’s left is on your right.',
-      map: wm(T_DOWN, [{ type: 'well', x: 3, y: 4 }], { x: 3, y: 1, facing: 'S' }),
-      approach: [{ x: 3, y: 2 }, { x: 3, y: 3 }],
-      options: [{ id: 'screen-left', tiles: [{ x: 2, y: 3 }, { x: 1, y: 3 }] }, { id: 'screen-right', tiles: [{ x: 4, y: 3 }, { x: 5, y: 3 }] }], correct: 1 },
-    { id: 'w_prep_5', type: 'prep', sentence: 'Pip is ___ the scarecrow.',
-      map: wm(LAWN_PATH, [{ type: 'scarecrow', x: 3, y: 1 }]), pip: { x: 3, y: 3, facing: 'N' },
-      options: ['next to', 'opposite', 'between'], correct: 1 },
-    { id: 'w_path_6', type: 'path', instruction: 'Go through the red door.',
-      map: wm(T_UP, [{ type: 'green_door', x: 2, y: 1 }, { type: 'red_door', x: 4, y: 1 }], { x: 3, y: 3, facing: 'N' }),
-      approach: [{ x: 3, y: 2 }, { x: 3, y: 1 }], options: [{ id: 'left', tiles: L }, { id: 'right', tiles: R }], correct: 1 },
-    { id: 'w_prep_6', type: 'prep', sentence: 'Pip is ___ the bench.',
-      map: wm(LAWN, [{ type: 'bench', x: 3, y: 2 }]), pip: { x: 3, y: 1, facing: 'S' },
-      options: ['behind', 'next to', 'between'], correct: 0 }
-  ];
+      options: [{ id: 'left', tiles: [{ x: 2, y: 2 }, { x: 1, y: 2 }] }, { id: 'straight', tiles: [{ x: 3, y: 1 }] }, { id: 'right', tiles: [{ x: 4, y: 2 }, { x: 5, y: 2 }] }],
+      correct: correct };
+  }
+  function prep(r, word, sentence, tiles, landmarks, pip, wrong) {
+    var opts = r.shuffle([word].concat(r.shuffle(wrong).slice(0, 2)));
+    return { type: 'prep', sentence: sentence, map: wm(tiles, landmarks), pip: pip, options: opts, correct: opts.indexOf(word) };
+  }
+  /** Every kind of warm-up question. Each maker takes the game's random numbers and picks the landmarks. */
+  var WARM = {
+    /* ---- path: read and click */
+    turn_left_at: function (r) { var s = r.pick(data.SOLID_TYPES); return tUp('Turn left at ' + lmName(s) + '.', [{ type: s, x: 3, y: 0 }], 0); },
+    turn_right_at: function (r) { var s = r.pick(data.SOLID_TYPES); return tUp('Turn right at ' + lmName(s) + '.', [{ type: s, x: 3, y: 0 }], 1); },
+    /* the landmarks stand just below the top path, where Pip walks: low ones only, so Pip is never hidden */
+    next_to_left: function (r) {
+      var s = r.shuffle(LOW_TYPES);
+      return tUp('Take the path next to ' + lmName(s[0]) + '.', [{ type: s[0], x: 1, y: 2 }, { type: s[1], x: 5, y: 2 }], 0);
+    },
+    next_to_right: function (r) {
+      var s = r.shuffle(LOW_TYPES);
+      return tUp('Take the path next to ' + lmName(s[0]) + '.', [{ type: s[1], x: 1, y: 2 }, { type: s[0], x: 5, y: 2 }], 1);
+    },
+    door_left: function (r) {
+      var d = r.shuffle(data.DOOR_TYPES);
+      return tUp('Go through ' + lmName(d[0]) + '.', [{ type: d[0], x: 2, y: 1 }, { type: d[1], x: 4, y: 1 }], 0);
+    },
+    door_right: function (r) {
+      var d = r.shuffle(data.DOOR_TYPES);
+      return tUp('Go through ' + lmName(d[0]) + '.', [{ type: d[1], x: 2, y: 1 }, { type: d[0], x: 4, y: 1 }], 1);
+    },
+    cross_straight: function () { return cross('Go straight. Do not turn.', [], 1); },
+    cross_left: function () { return cross('Turn left here.', [], 0); },
+    cross_right: function () { return cross('Turn right here.', [], 2); },
+    walk_to: function (r) {
+      var s = r.shuffle(data.SOLID_TYPES), arm = r.int(3);
+      return cross('Walk to ' + lmName(s[arm]) + '.', [{ type: s[0], x: 1, y: 1 }, { type: s[1], x: 3, y: 0 }, { type: s[2], x: 5, y: 1 }], arm);
+    },
+    /* ---- prep: look and choose the word */
+    next_to_r: function (r) {
+      var s = r.pick(data.SOLID_TYPES);
+      return prep(r, 'next to', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 4, y: 2 }], { x: 3, y: 2, facing: 'S' }, ['behind', 'in front of', 'between', 'opposite']);
+    },
+    next_to_l: function (r) {
+      var s = r.pick(data.SOLID_TYPES);
+      return prep(r, 'next to', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 2, y: 2 }], { x: 3, y: 2, facing: 'S' }, ['behind', 'in front of', 'between', 'opposite']);
+    },
+    behind_1: function (r) {
+      var s = r.pick(LOW_TYPES);
+      return prep(r, 'behind', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 3, y: 2 }], { x: 3, y: 1, facing: 'S' }, ['in front of', 'between', 'opposite']);
+    },
+    behind_2: function (r) {
+      var s = r.pick(LOW_TYPES);
+      return prep(r, 'behind', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 2, y: 3 }], { x: 2, y: 2, facing: 'S' }, ['in front of', 'between', 'opposite']);
+    },
+    in_front_1: function (r) {
+      var s = r.pick(data.SOLID_TYPES);
+      return prep(r, 'in front of', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 3, y: 1 }], { x: 3, y: 2, facing: 'S' }, ['behind', 'between', 'opposite']);
+    },
+    in_front_2: function (r) {
+      var s = r.pick(data.SOLID_TYPES);
+      return prep(r, 'in front of', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 4, y: 2 }], { x: 4, y: 3, facing: 'S' }, ['behind', 'between', 'opposite']);
+    },
+    between: function (r) {
+      var s = r.shuffle(data.SOLID_TYPES);
+      return prep(r, 'between', 'Pip is ___ ' + lmName(s[0]) + ' and ' + lmName(s[1]) + '.', LAWN,
+        [{ type: s[0], x: 2, y: 2 }, { type: s[1], x: 4, y: 2 }], { x: 3, y: 2, facing: 'S' }, ['behind', 'in front of', 'opposite']);
+    },
+    between_wide: function (r) {
+      var s = r.shuffle(data.SOLID_TYPES);
+      return prep(r, 'between', 'Pip is ___ ' + lmName(s[0]) + ' and ' + lmName(s[1]) + '.', LAWN,
+        [{ type: s[0], x: 1, y: 2 }, { type: s[1], x: 5, y: 2 }], { x: 3, y: 2, facing: 'S' }, ['next to', 'behind', 'opposite']);
+    },
+    opposite_below: function (r) {
+      var s = r.pick(data.SOLID_TYPES);
+      return prep(r, 'opposite', 'Pip is ___ ' + lmName(s) + '.', LAWN_PATH, [{ type: s, x: 3, y: 1 }], { x: 3, y: 3, facing: 'N' }, ['next to', 'between', 'behind']);
+    },
+    opposite_above: function (r) {
+      var s = r.pick(LOW_TYPES);
+      return prep(r, 'opposite', 'Pip is ___ ' + lmName(s) + '.', LAWN_PATH, [{ type: s, x: 3, y: 3 }], { x: 3, y: 1, facing: 'S' }, ['next to', 'between', 'in front of']);
+    }
+  };
+  data.WARMUP_KINDS = {
+    path: ['turn_left_at', 'turn_right_at', 'next_to_left', 'next_to_right', 'door_left', 'door_right', 'cross_straight', 'cross_left', 'cross_right', 'walk_to'],
+    /* one path question from each family per game, so every game practises all five kinds of instruction */
+    pathFamilies: { turn: ['turn_left_at', 'turn_right_at'], next_to: ['next_to_left', 'next_to_right'], door: ['door_left', 'door_right'],
+      cross: ['cross_straight', 'cross_left', 'cross_right'], walk_to: ['walk_to'] },
+    prep: { 'next to': ['next_to_r', 'next_to_l'], 'behind': ['behind_1', 'behind_2'], 'in front of': ['in_front_1', 'in_front_2'],
+      'between': ['between', 'between_wide'], 'opposite': ['opposite_below', 'opposite_above'] }
+  };
   data.WARMUP_COUNT = 10;
-  /** The 10 questions used in a session (the first 10; the last two are spares). */
-  data.warmupSet = function () { return data.warmup.slice(0, data.WARMUP_COUNT); };
+  /** One warm-up question of a kind, with landmarks picked by the random numbers `r` (or by `seed`). */
+  data.warmupQuestion = function (kind, r) {
+    if (!WARM[kind]) return null;
+    if (typeof r === 'number' || r == null) r = data.rng(r || 0);
+    var q = WARM[kind](r);
+    q.id = 'w_' + kind; q.kind = kind;
+    return q;
+  };
+  /** 10 questions for a game: one path question of each family (turn at / next to / door / crossing / walk to) +
+   *  one question for each of the 5 prepositions, in a random order, path and prep taking turns. */
+  function makeWarmup(r) {
+    var fam = data.WARMUP_KINDS.pathFamilies;
+    var paths = r.shuffle(Object.keys(fam)).map(function (f) { return r.pick(fam[f]); });
+    var preps = r.shuffle(PREPS).map(function (p) { return r.pick(data.WARMUP_KINDS.prep[p]); });
+    var out = [];
+    for (var i = 0; i < 5; i++) { out.push(data.warmupQuestion(paths[i], r)); out.push(data.warmupQuestion(preps[i], r)); }
+    return out;
+  }
+  /** Every instruction a warm-up path question can use (for the pre-recorded voice). */
+  data.allWarmupInstructions = function () {
+    var out = ['Go straight. Do not turn.', 'Turn left here.', 'Turn right here.'];
+    data.SOLID_TYPES.forEach(function (s) {
+      out.push('Turn left at ' + lmName(s) + '.', 'Turn right at ' + lmName(s) + '.', 'Walk to ' + lmName(s) + '.');
+    });
+    LOW_TYPES.forEach(function (s) { out.push('Take the path next to ' + lmName(s) + '.'); });
+    data.DOOR_TYPES.forEach(function (d) { out.push('Go through ' + lmName(d) + '.'); });
+    return out;
+  };
 
   /* ------------------------------------------------------------------ hint ladder (spec 4.2.7) */
   /** Level 1 = general pointer; level 2 = sentence starter (using level 2 marks that fact `assisted`). */
@@ -401,10 +696,7 @@
     look:  { 1: 'Ask what it looks like.',   2: 'What does it …?' },
     place: { 1: 'Ask about the place.',      2: 'Where is …?' }
   };
-  data.guideHints = {
-    1: 'Tell me: go straight, turn left, turn right or stop.',
-    2: 'Go straight until the … Then turn …'
-  };
+  /* Guide hints are not fixed sentences: js/guide-hint.js works them out from where Pip is now. */
 
   /* ------------------------------------------------------------------ canned lines (never written by the model) */
   data.text = {
@@ -443,14 +735,175 @@
     ]
   };
 
-  /* ------------------------------------------------------------------ words used by validators */
-  /** Every word that could leak a fact (item nouns, landmark words, look adjectives, place prepositions). */
+  /* ================================================================== the game's own content (per seed)
+   * Every new game gets a random seed (MR.state.begin). The seed decides, always in the same way:
+   *   - which 4 of the 8 things Pip needs, in which order, and how each one looks (size + colour)
+   *   - which Go map shape each thing gets, which landmark stands where, and which last branch hides the thing
+   *   - the 10 warm-up questions (kinds, order and landmarks)
+   *   - for each Guide route: mirrored or not, and which solid landmark stands where
+   * MR.data.useSession(seed) switches data.items / goMap() / guideMaze() / warmupSet() to that game.
+   * useSession(null) switches back to the classic game (the four original things). */
+  var current = null;
+  var sessionCache = {};
+  var CLASSIC_CONTENT = classicContent();
+  CLASSIC_CONTENT.warmup = makeWarmup(data.rng(0));
+
+  /** Build (but do not switch to) the content of a game. Pure: the same seed always gives the same content. */
+  data.makeSession = function (seed) {
+    seed = seed >>> 0;
+    if (sessionCache[seed]) return sessionCache[seed];
+    var r = data.rng(seed);
+    var picks = r.shuffle(data.POOL).slice(0, data.ITEM_COUNT);
+    var shapes = r.shuffle(data.TEMPLATE_IDS);
+    var colours = r.shuffle(data.COLOURS);
+    var items = [], goMaps = {};
+    picks.forEach(function (p, i) {
+      var colour = colours[i], size = r.pick(p.sizes), tpl = TEMPLATES[shapes[i]];
+      var choice = { doors: r.shuffle(data.DOOR_TYPES), solids: fitSolids(solidSpots(tpl), r.shuffle(data.SOLID_TYPES)), win: r.pick(winnable(tpl)) };
+      var b = buildThing(p, { size: size, colour: colour, look: lookText(size, colour) }, tpl, choice);
+      items.push(b.item); goMaps[p.id] = b.map;
+    });
+    var guide = {};
+    data.routeIds.forEach(function (rid) { guide[rid] = { mirror: r.bool(), perm: r.shuffle([0, 1, 2, 3, 4, 5]) }; });
+    var content = { seed: seed, items: items, goMaps: goMaps, guide: guide, warmup: makeWarmup(r) };
+    var keys = Object.keys(sessionCache);
+    if (keys.length > 20) delete sessionCache[keys[0]];
+    sessionCache[seed] = content;
+    return content;
+  };
+
+  function apply(content) {
+    current = content;
+    data.items = content.items;
+    data.itemIds = content.items.map(function (it) { return it.id; });
+    data.goMaps = content.goMaps;
+    data.warmup = content.warmup;
+  }
+  /**
+   * Switch the game content to the game of this seed (a whole number 0..4294967295), or back to the classic
+   * game with null. Call it whenever the pupil changes (MR.state does). Emits 'data:session'.
+   * @param {number|null} seed
+   * @param {string} [difficulty]  kept for information (Guide mazes are chosen per call of guideMaze)
+   * @returns the content {seed, items, goMaps, guide, warmup}
+   */
+  data.useSession = function (seed, difficulty) {
+    var hasSeed = seed !== null && seed !== undefined && seed !== '' && !isNaN(Number(seed));
+    var before = current;
+    apply(hasSeed ? data.makeSession(Number(seed)) : CLASSIC_CONTENT);
+    current.difficulty = difficulty || null;
+    if (before !== current && MR.emit) MR.emit('data:session', { seed: current.seed });
+    return current;
+  };
+  /** Seed of the game in use, or null for the classic game. */
+  data.sessionSeed = function () { return current ? current.seed : null; };
+
+  /** Item in this game (by index 0..3 or id); an id of any of the 8 things also works (the teacher view shows
+   *  pupils who had other things) - those come without look / place. */
+  data.getItem = function (idOrIndex) {
+    if (typeof idOrIndex === 'number') return data.items[idOrIndex] || null;
+    for (var i = 0; i < data.items.length; i++) if (data.items[i].id === idOrIndex) return data.items[i];
+    return poolItem(idOrIndex);
+  };
+  /** The ONLY text Pip may use to give a fact. fact: 'name' | 'look' | 'place'. */
+  data.factText = function (itemId, fact) {
+    var it = data.getItem(itemId);
+    if (!it) return '';
+    if (fact === 'name') return 'I need ' + it.name + '.';
+    return it[fact] || '';
+  };
+  /** Colour name of a thing in this game (its icon is drawn in this colour). */
+  data.itemColour = function (itemId) {
+    var it = data.getItem(itemId);
+    return it ? it.colour : null;
+  };
+  /** The facts of this game's four things, for the log ('session' record) and the teacher view. */
+  data.sessionFacts = function () {
+    return data.items.map(function (it) {
+      return { id: it.id, colour: it.colour, name: data.factText(it.id, 'name'), look: it.look, place: it.place };
+    });
+  };
+  data.goMap = function (itemIdOrIndex) {
+    var it = data.getItem(itemIdOrIndex);
+    return it ? (data.goMaps[it.id] || null) : null;
+  };
+  /** The 10 warm-up questions of this game. */
+  data.warmupSet = function () { return data.warmup.slice(0, data.WARMUP_COUNT); };
+
+  /* ------------------------------------------------------------------ every possible fact (voice + validators) */
+  function permutations(list, n) {
+    if (n === 0) return [[]];
+    var out = [];
+    list.forEach(function (x, i) {
+      var rest = list.slice(0, i).concat(list.slice(i + 1));
+      permutations(rest, n - 1).forEach(function (p) { out.push([x].concat(p)); });
+    });
+    return out;
+  }
+  var allFactsMemo = null;
+  /** Every sentence Pip can ever use to give a fact, in any game (names, looks, place sentences). Sorted. */
+  data.allFactTexts = function () {
+    if (allFactsMemo) return allFactsMemo.slice();
+    var set = {};
+    data.POOL.forEach(function (p) {
+      set['I need ' + p.name + '.'] = true;
+      p.sizes.forEach(function (s) { p.colours.forEach(function (c) { set[lookText(s, c)] = true; }); });
+    });
+    CLASSIC_CONTENT.items.forEach(function (it) { set[it.look] = true; set[it.place] = true; });
+    data.TEMPLATE_IDS.forEach(function (tid) {
+      var tpl = TEMPLATES[tid];
+      permutations(data.DOOR_TYPES, slotCount(tpl, 'door')).forEach(function (doors) {
+        permutations(data.SOLID_TYPES, slotCount(tpl, 'solid')).forEach(function (solids) {
+          if (!solidsFit(solidSpots(tpl), solids)) return;      /* a game never puts a tall landmark there */
+          var types = assignTypes(tpl, { doors: doors, solids: solids });
+          winnable(tpl).forEach(function (w) { set[placeText(tpl, types, w)] = true; });
+        });
+      });
+    });
+    allFactsMemo = Object.keys(set).sort();
+    return allFactsMemo.slice();
+  };
+
+  /** Every word that could leak a fact (item nouns, landmark words, look words, place prepositions). */
   data.factWords = (function () {
     var set = {};
     function add(s) { String(s).toLowerCase().replace(/[^a-z ]/g, ' ').split(/\s+/).forEach(function (w) { if (w) set[w] = true; }); }
-    data.items.forEach(function (it) { add(it.noun); add(it.look); add(it.place); });
+    data.POOL.forEach(function (p) { add(p.noun); });
+    data.SIZES.forEach(add); data.COLOURS.forEach(add);
+    data.allFactTexts().forEach(function (t) { if (!/^I need /.test(t)) add(t); });
     data.landmarkIds.forEach(function (id) { data.landmarkTypes[id].words.forEach(add); });
     ['it', 'is', 'and', 'the', 'very', 'to', 'of', 'in', 'a'].forEach(function (w) { delete set[w]; });
     return Object.keys(set).sort();
   })();
+
+  /* ------------------------------------------------------------------ an example solution (demo evidence, tests) */
+  /**
+   * Fewest instructions from `from` (default: the start) to the exit of a Guide maze.
+   * @returns {Array<{type:'turn', dir:'left'|'right'} | {type:'forward', steps:number}>} or null if there is no way.
+   */
+  data.guideSolution = function (mz, from) {
+    from = from || mz.start;
+    var key = function (s) { return s.x + ',' + s.y + ',' + s.f; };
+    var start = { x: from.x, y: from.y, f: from.facing };
+    var prev = {}; prev[key(start)] = null;
+    var queue = [start];
+    while (queue.length) {
+      var s = queue.shift();
+      if (mz.exit && s.x === mz.exit.x && s.y === mz.exit.y) {
+        var out = [], k = key(s);
+        while (prev[k]) { out.unshift(prev[k].act); k = key(prev[k].from); }
+        return out;
+      }
+      var next = [{ x: s.x, y: s.y, f: maze.LEFT_OF[s.f], act: { type: 'turn', dir: 'left' } },
+        { x: s.x, y: s.y, f: maze.RIGHT_OF[s.f], act: { type: 'turn', dir: 'right' } }];
+      var d = maze.DIRS[s.f], x = s.x + d.dx, y = s.y + d.dy, n = 1;
+      while (maze.isWalkable(mz, x, y)) { next.push({ x: x, y: y, f: s.f, act: { type: 'forward', steps: n } }); x += d.dx; y += d.dy; n++; }
+      for (var i = 0; i < next.length; i++) {
+        var nk = key(next[i]);
+        if (!(nk in prev)) { prev[nk] = { from: s, act: next[i].act }; queue.push({ x: next[i].x, y: next[i].y, f: next[i].f }); }
+      }
+    }
+    return null;
+  };
+
+  apply(CLASSIC_CONTENT);
 })(typeof window !== 'undefined' ? window : globalThis);

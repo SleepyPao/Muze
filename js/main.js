@@ -9,6 +9,7 @@
  *     &facts=name,look      ask: facts already unlocked (default none)
  *     &route=0|1            guide: which route (default 0)
  *     &difficulty=simple    guide / any: maze difficulty
+ *     &seed=123             any: the game's content (things, maps, warm-up, maze variants); default random
  *     &demo=1               review / teacher: fill the log with example evidence for three pupils
  *   ?memory=1               use volatile memory storage without seeding (tests)
  */
@@ -28,11 +29,14 @@
 
   root.addEventListener('error', function (e) { if (root.console) root.console.error('[MR] error', e.message); });
 
+  /* A new game can have other things: the top bar rebuilds its slots from this game's things */
+  MR.on('data:session', function () { MR.ui.topbar.refresh(); });
+
   /* ------------------------------------------------------------ example evidence (debug / teacher demo) */
   /** Play a few turns through the real APIs so the Review and Teacher screens have something to show. */
-  MR.demoEvidence = function (classNo, quality) {
+  MR.demoEvidence = function (classNo, quality, seed) {
     var good = quality !== 'weak';
-    MR.state.seed({ class_no: classNo, warmup: true, difficulty: 'standard' });
+    MR.state.seed({ class_no: classNo, warmup: true, difficulty: 'standard', seed: seed != null ? seed : MR.data.seedFromText(classNo) });
     MR.log.event('warmup', 'summary', { correct: good ? 9 : 6, total: 10 });
     var asks = good ? ['What do you need?', 'What does it look like?', 'Where it is?'] : ['Where', 'Where is it?', 'what you need', 'What colour is it?'];
     MR.data.items.forEach(function (it, i) {
@@ -45,38 +49,50 @@
         MR.log.askTurn({ item_id: it.id, input_mode: k === 2 ? 'speech' : 'text', asr_text: k === 2 ? text.toLowerCase().replace(/\?/, '') : '', sent_text: text, result: r, hint_level: hint, assisted: u.assisted });
       });
       it.junctions.forEach(function (j, ji) {
-        var wrongFirst = !good && (i + ji) % 3 === 0;
+        var wrongFirst = !good && (i + ji) % 3 === 0, wrong = (j.correct + 1) % j.options.length;
         if (wrongFirst) {
-          var w = MR.state.recordJunction(it.id, ji, 1, false);
-          MR.log.goChoice({ item_id: it.id, junction_index: ji, choice: 1, correct: false, first: w.first, first_choice_correct: w.first_choice_correct });
+          var w = MR.state.recordJunction(it.id, ji, wrong, false);
+          MR.log.goChoice({ item_id: it.id, junction_index: ji, choice: wrong, choice_label: j.options[wrong], correct: false, first: w.first, first_choice_correct: w.first_choice_correct });
         }
-        var c = MR.state.recordJunction(it.id, ji, 0, true);
-        MR.log.goChoice({ item_id: it.id, junction_index: ji, choice: 0, correct: true, first: c.first, first_choice_correct: c.first_choice_correct });
+        var c = MR.state.recordJunction(it.id, ji, j.correct, true);
+        MR.log.goChoice({ item_id: it.id, junction_index: ji, choice: j.correct, choice_label: j.options[j.correct], correct: true, first: c.first, first_choice_correct: c.first_choice_correct });
       });
       MR.state.collectItem(it.id);
       MR.log.event('go', 'pickup', { item_id: it.id });
     });
     MR.state.markBreakSeen();
-    var scripts = {
-      r1: good ? ['Go straight until the fountain.', 'Turn right, then walk to the tree and turn left', 'go straight until the windmill. turn right.', 'Go straight to the exit.'] :
-        ['go', 'Go straight until the fountain.', 'turn', 'right', 'go straight', 'turn left', 'go straight', 'go straight', 'turn around', 'go straight', 'turn left', 'your left',
-          'go straight until the tree', 'turn left', 'go straight', 'go straight', 'turn right', 'go to the exit'],
-      r2: good ? ['Go straight.', 'Go straight.', 'Turn right.', 'your right', 'Go straight until the scarecrow.', 'Turn left.', 'Go straight.', 'Go straight.', 'Turn right.', 'Go straight to the exit.'] :
-        ['Go straight.', 'Turn left', 'my left', 'go straight', 'turn around', 'go straight', 'go straight', 'turn right', 'your right', 'go straight', 'turn left', 'go straight', 'go straight', 'turn right', 'go straight']
-    };
+    /* Guide: a few muddled lines first (weak pupil), then a shortest way out of THIS game's maze, said as a pupil would
+     * ("Go straight until the well.", "Turn left."). Pip's questions are answered like a pupil would answer them. */
     MR.data.routeIds.forEach(function (rid) {
-      var mz = MR.data.guideMaze(rid, 'standard'), run = MR.guide.newRun(mz), ctx = {}, pending = null;
-      scripts[rid].forEach(function (text) {
-        if (run.finished) return;
-        var p = MR.rules.parseGuide(text, ctx), res = null, actions = p.actions;
+      var mz = MR.data.guideMaze(rid, 'standard'), run = MR.guide.newRun(mz), ctx = {}, pending = null, guard = 0;
+      var queue = good ? [] : ['go', 'turn', 'left', 'go straight', 'walk to the house', 'turn around'];
+      function sayLine(text) {
+        var p = MR.rules.parseGuide(text, ctx), res = null, actions = p.actions, answer = null;
         if (actions.length) {
           if (pending) { actions = MR.guide.mergeAnswer(pending, actions); pending = null; }
           res = MR.guide.execute(mz, run, actions);
-          if (res.status === 'clarify' && res.clarify.kind === 'whose') { pending = res.pending; ctx = { expect: 'whose', pendingDir: res.clarify.dir }; } else ctx = {};
+          if (res.status === 'clarify' && res.clarify.kind === 'whose') {
+            pending = res.pending; ctx = { expect: 'whose', pendingDir: res.clarify.dir };
+            answer = (good ? 'your ' : 'my ') + res.clarify.dir;
+          } else ctx = {};
         } else { ctx = p.clarifyKind === 'dir' ? { expect: 'dir' } : {}; }
-        MR.log.guideTurn({ route_id: rid, input_mode: 'text', sent_text: text, parsed_actions: actions, clarify_triggered: !actions.length || (res && res.status === 'clarify'),
-          ai_reply: res ? (res.say || 'OK!') : p.clarify, hit_wall: !!(res && res.hit_wall), reached_exit: !!(res && res.reached_exit), source: 'rules' });
-      });
+        MR.log.guideTurn({ route_id: rid, maze_id: mz.id, input_mode: 'text', sent_text: text, parsed_actions: actions, clarify_triggered: !actions.length || (res && res.status === 'clarify'),
+          ai_reply: res ? (res.say || 'OK!') : p.clarify, hit_wall: !!(res && res.hit_wall), reached_exit: !!(res && res.reached_exit), note: res && res.note ? res.note : '', source: 'rules' });
+        return answer;
+      }
+      function lineFor(a) {
+        if (a.type === 'turn') return run.facing === 'S' && run.whoseMode === 'my' ? 'Turn your ' + a.dir + '.' : 'Turn ' + a.dir + '.';
+        var seen = MR.maze.visibleAhead(mz, run, run.facing).filter(function (v) { return v.dist === a.steps; })[0];
+        if (seen) return seen.type === 'exit' ? 'Go to the exit.' : 'Go straight until the ' + MR.guide.label(seen.type) + '.';
+        return 'Go forward ' + a.steps + (a.steps === 1 ? ' step.' : ' steps.');
+      }
+      while (queue.length && guard++ < 40) { var ans = sayLine(queue.shift()); if (ans) queue.unshift(ans); }
+      while (!run.finished && guard++ < 40) {
+        var plan = MR.data.guideSolution(mz, { x: run.x, y: run.y, facing: run.facing });
+        if (!plan || !plan.length) break;
+        var ans2 = sayLine(lineFor(plan[0]));
+        if (ans2) sayLine(ans2);
+      }
       if (run.finished) MR.state.finishRoute(rid, run); else MR.state.saveRouteProgress(rid, run);
     });
     MR.log.setRubric(classNo, good ? { A_question_form: 3, C_precision: 2, C_repair: 3 } : { A_question_form: 1 });
@@ -88,10 +104,11 @@
     var item = Math.max(0, Math.min(3, parseInt(q.get('item') || '0', 10) || 0));
     var route = Math.max(0, Math.min(1, parseInt(q.get('route') || '0', 10) || 0));
     var diff = q.get('difficulty') === 'simple' ? 'simple' : 'standard';
-    var base = { class_no: q.get('class') || '5A-01', difficulty: diff, warmup: true };
+    var seed = q.get('seed') != null && q.get('seed') !== '' && !isNaN(Number(q.get('seed'))) ? Number(q.get('seed')) >>> 0 : null;
+    var base = { class_no: q.get('class') || '5A-01', difficulty: diff, warmup: true, seed: seed };
     switch (screen) {
       case 'start': return MR.go('start');
-      case 'warmup': MR.state.seed({ class_no: base.class_no, difficulty: diff }); return MR.go('warmup');
+      case 'warmup': MR.state.seed({ class_no: base.class_no, difficulty: diff, seed: seed }); return MR.go('warmup');
       case 'ask': {
         var f = q.get('facts'); base.items = item; base.facts = f ? f.split(',') : 'none';
         MR.state.seed(base); return MR.go('ask', { item: item });
@@ -100,7 +117,7 @@
       case 'sessionbreak': base.items = 4; MR.state.seed(base); return MR.go('sessionbreak');
       case 'guide': base.items = 4; base.breakSeen = true; base.routes = route; MR.state.seed(base); return MR.go('guide', { route: route });
       case 'review':
-        if (q.get('demo') !== '0') MR.demoEvidence(base.class_no, 'good');
+        if (q.get('demo') !== '0') MR.demoEvidence(base.class_no, 'good', seed);
         else { base.items = 4; base.breakSeen = true; base.routes = 2; MR.state.seed(base); }
         return MR.go('review');
       case 'teacher':

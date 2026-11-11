@@ -3,13 +3,18 @@
  *
  *   node tests/e2e/playthrough.js            (npm run test:e2e)
  *
- * 1. Pupil 5A-12 (standard maze) plays everything: Start -> Warm-up (10) -> 4 things (Ask + Go) -> end of lesson 1
- *    -> Guide route 1 + 2 -> Review -> Start.
- * 2. Pupil 5A-13 (simple maze) plays everything on the same device.
+ * Every game has its own random content (seed), so the test never hard-codes things, facts or maps: it reads them
+ * from the running page (MR.data) and plays whatever this game is.
+ * 1. Pupil 5A-12 (standard maze) plays everything: Start -> Warm-up (10) -> 4 things (Ask + Go, legend on the Go map)
+ *    -> end of lesson 1 -> reload + same class number = same game back -> Guide route 1 + 2 (scripted) -> Review.
+ * 2. Pupil 5A-13 (simple maze) plays everything on the same device: a different game (other seed, other content);
+ *    in Guide this pupil types ONLY the level-2 hints ("Try: ...") and must reach both exits without a wall.
  * 3. Teacher view: two separate rows with the right counts, rubric entry, CSV + JSON export.
- * 4. Broken AI: empty content, then invalid JSON -> "Sorry, can you say that again?", game keeps working,
+ * 4. Speak button: a stub recogniser; the 10 s countdown ring appears next to it, counts down, stops at 0 and keeps
+ *    the words; a quiet moment after a finished phrase stops it early.
+ * 5. Broken AI: empty content, then invalid JSON -> "Sorry, can you say that again?", game keeps working,
  *    after two failures the offline rules take over.
- * 5. No arrow-key handling in the code; no console errors.
+ * 6. No arrow-key handling in the code; no console errors; every fixed line Pip said has a pre-recorded clip.
  * Checks follow the acceptance list in PLAN.md section 10. */
 'use strict';
 const path = require('path');
@@ -45,9 +50,37 @@ async function waitHighlights(page) {
   await page.waitForFunction(() => { const sc = MR.render.active[MR.render.active.length - 1]; return sc && sc.debugState().highlights.length > 0; }, null, { timeout: 8000 });
 }
 async function factsOn(page) { return page.$$eval('.mr-fact.is-on', (els) => els.map((e) => e.dataset.fact)); }
+const SAID_BEFORE_RELOAD = [];
+/** Record every line Pip says (to check that each fixed line has a pre-recorded clip). Again after a reload. */
+async function recordSaid(page) {
+  await page.evaluate(() => {
+    window.__said = window.__said || new Set();
+    const say = MR.ui.dialog.say;
+    MR.ui.dialog.say = function (t, o) { if (!o || o.speak !== false) window.__said.add(String(t).trim()); return say.apply(this, arguments); };
+  });
+}
+/** This game's content, read from the page: seed, the four things' facts, warm-up, Guide maze variants. */
+async function content(page) {
+  return page.evaluate(() => ({
+    seed: MR.state.sessionSeed(),
+    facts: MR.data.sessionFacts(),
+    warm: MR.data.warmupSet().map((q) => q.instruction || q.sentence),
+    guide: MR.data.routeIds.map((r) => MR.data.guideMaze(r, MR.state.get().difficulty).id)
+  }));
+}
+/** Tap the first entry of the map legend: its name must appear on the map as a label, and the landmark must blink. */
+async function checkLegend(page, where) {
+  const name = (await page.textContent('.mr-legend__item .mr-legend__name')).trim();
+  await page.click('.mr-legend__item');
+  await page.waitForFunction((n) => Array.from(document.querySelectorAll('.mr-maplabel')).some((e) => e.textContent === n && e.offsetWidth > 0), name, { timeout: 3000 });
+  const st = await page.evaluate(() => MR.render.active[MR.render.active.length - 1].debugState());
+  ok(st.pings.length > 0 && st.labels.some((l) => l.text === name) && await page.$('.mr-legend__item.is-on'),
+    `${where}: tapping "${name}" in the legend blinks it on the map with its name`);
+}
 
 /* ------------------------------------------------------------------ one whole game */
 async function playGame(page, classNo, difficulty, opts) {
+  opts = opts || {};
   console.log(`\n== ${classNo} (${difficulty})`);
   await page.fill('#mr-classno-input', classNo);
   if (difficulty === 'simple') await page.click('#mr-diff-simple');
@@ -55,6 +88,9 @@ async function playGame(page, classNo, difficulty, opts) {
   for (let i = 0; i < 4; i++) await page.click('#mr-actions .mr-btn');
   await page.waitForSelector('.mr-warm');
   ok(true, 'story shown, warm-up starts');
+  const game = await content(page);
+  ok(game.seed !== null && game.facts.length === 4 && new Set(game.facts.map((f) => f.id)).size === 4,
+    `a new game gets its own seed (${game.seed}) and four different things: ${game.facts.map((f) => f.colour + ' ' + f.id).join(', ')}`);
 
   /* ---------- warm-up: answer question 1 wrong on purpose, the rest right */
   const qs = await page.evaluate(() => MR.data.warmupSet().map((q) => ({ type: q.type, correct: q.correct, options: q.options })));
@@ -113,6 +149,7 @@ async function playGame(page, classNo, difficulty, opts) {
 
     /* ---------- Go */
     await page.waitForSelector('.mr-go');
+    if (k === 0) { await waitHighlights(page); await checkLegend(page, 'Go map'); }
     const mz = await page.evaluate((id) => { const m = MR.data.goMap(id); return { junctions: m.junctions.map((j) => ({ branches: j.branches.map((b) => ({ path: b.path, correct: b.correct })) })) }; }, it.id);
     for (let j = 0; j < 2; j++) {
       await waitHighlights(page);
@@ -139,12 +176,31 @@ async function playGame(page, classNo, difficulty, opts) {
   await page.waitForSelector('.mr-break');
   ok(/End of lesson 1/.test(await page.textContent('.mr-break')), 'end of lesson 1 screen');
   ok(await page.$$eval('.mr-slot.is-filled', (e) => e.length) === 4, 'all four things in the top bar');
+  ok(JSON.stringify(await page.$$eval('.mr-slot', (e) => e.map((x) => x.dataset.item))) === JSON.stringify(items.map((it) => it.id)),
+    'the top bar shows THIS game\'s four things');
+
+  if (opts.resume) {
+    /* next lesson: the page is reloaded, the pupil types the same class number -> exactly the same game */
+    SAID_BEFORE_RELOAD.push(...await page.evaluate(() => Array.from(window.__said)));
+    await page.reload();
+    await recordSaid(page);
+    await page.fill('#mr-classno-input', classNo);
+    await page.click('#mr-start-btn');
+    await page.waitForSelector('.mr-break');
+    const again = await content(page);
+    ok(JSON.stringify(again) === JSON.stringify(game), `same class number after a reload: same seed, same things, facts, warm-up and mazes (${again.guide.join(', ')})`);
+    ok(await page.$$eval('.mr-slot.is-filled', (e) => e.length) === 4, 'resumed at the end of lesson 1 with all four things');
+  }
   await page.click('#mr-break-next');
 
   /* ---------- Guide x 2 */
   for (let r = 0; r < 2; r++) {
     await page.waitForSelector('.mr-guide');
-    if (r === 0) {
+    if (r === 0 && !opts.followHints) {
+      await checkLegend(page, 'Guide map');
+      await page.click('#mr-hint');
+      const h1 = (await page.textContent('.mr-guide__hint .mr-hintbox__text')).trim();
+      ok(/^Pip (is|can)/.test(h1) && !/…/.test(h1), `Guide hint 1 says what Pip can see from where he is: "${h1}"`);
       let s = await send(page, 'turn');
       ok(s === 'Left or right?', 'Guide: "turn" -> "Left or right?"');
       s = await send(page, 'left');
@@ -173,10 +229,28 @@ async function playGame(page, classNo, difficulty, opts) {
     });
     ok(plan.min >= 5, `route ${plan.rid}: shortest solution needs ${plan.min} instructions (>= 5)`);
     let whose = false;
-    for (const ins of plan.out) {
-      let s = await send(page, ins);
-      const m = /^My (left|right) or your \1\?$/.exec(s);
-      if (m) { whose = true; s = await send(page, 'your ' + m[1]); }
+    if (opts.followHints) {
+      /* type ONLY what hint 2 says ("Try: Go straight until the well."), nothing else */
+      const typed = [];
+      let walls = 0;
+      for (let n = 0; n < 40 && !(await page.isVisible('#mr-overlay')); n++) {
+        await page.click('#mr-hint');
+        await page.click('#mr-hint');
+        const t = (await page.textContent('.mr-guide__hint .mr-hintbox__text')).trim();
+        const m = /^Try: (.+?)(?: \((.+)\))?$/.exec(t);
+        assert.ok(m, 'hint 2 is a sentence to try: ' + t);
+        typed.push(m[1]);
+        const s = await send(page, m[1]);
+        if (/^My (left|right) or your \1\?$/.test(s)) whose = true;
+        if (/There is a wall/.test(s)) walls++;
+      }
+      ok(walls === 0 && typed.length <= plan.min + 3, `route ${plan.rid}: typing only hint 2 reaches the way out, no wall (${typed.length} lines: ${typed.join(' / ')})`);
+    } else {
+      for (const ins of plan.out) {
+        let s = await send(page, ins);
+        const m = /^My (left|right) or your \1\?$/.exec(s);
+        if (m) { whose = true; s = await send(page, 'your ' + m[1]); }
+      }
     }
     if (plan.rid === 'r2') ok(whose, 'route 2 (Pip faces the pupil): "My left or your left?" asked and answered');
     await page.waitForSelector('#mr-overlay:not([hidden])', { timeout: 8000 });
@@ -195,6 +269,7 @@ async function playGame(page, classNo, difficulty, opts) {
   await page.click('#mr-overlay-btn');
   await page.waitForSelector('.mr-start');
   ok(true, `${classNo} finished the whole game`);
+  return game;
 }
 
 /* ------------------------------------------------------------------ main */
@@ -210,14 +285,12 @@ async function playGame(page, classNo, difficulty, opts) {
 
   await page.goto(URL + '?fast=1');
   ok(await page.isVisible('#mr-demo'), '"Demo mode" badge shown without a key');
-  await page.evaluate(() => {
-    window.__said = new Set();
-    const say = MR.ui.dialog.say;
-    MR.ui.dialog.say = function (t, o) { if (!o || o.speak !== false) window.__said.add(String(t).trim()); return say.apply(this, arguments); };
-  });
+  await recordSaid(page);
 
-  await playGame(page, '5A-12', 'standard');
-  await playGame(page, '5A-13', 'simple');
+  const g1 = await playGame(page, '5A-12', 'standard', { resume: true });
+  const g2 = await playGame(page, '5A-13', 'simple', { followHints: true });
+  ok(g1.seed !== g2.seed && JSON.stringify(g1.facts) !== JSON.stringify(g2.facts) && JSON.stringify(g1.warm) !== JSON.stringify(g2.warm),
+    'two pupils get two different games (seed, things / facts, warm-up)');
 
   /* ---------- teacher view */
   console.log('\n== teacher view');
@@ -244,11 +317,12 @@ async function playGame(page, classNo, difficulty, opts) {
   ok(json.app === 'maze-rescue' && json.entries.length > 50 && json.entries.every((e) => e.class_no && !('player' in e) && !('audio' in e)), 'JSON export: every record has class_no, no player field, no audio');
   ok(json.entries.filter((e) => e.stage === 'ask' && e.event === 'turn').every((e) => 'sent_text' in e && 'asr_text' in e && 'category' in e && 'fact_given' in e && 'hint_level' in e && 'clarification' in e && 'input_mode' in e && 'turn' in e),
     'Ask records have the spec 5.3 fields');
-  const locked = await page.evaluate(() => MR.log.add({ class_no: '5A-12', stage: 'ask', item_id: 'key', sent_text: 'hack' }) === null);
+  const locked = await page.evaluate(() => MR.log.add({ class_no: '5A-12', stage: 'ask', item_id: MR.log.sessionOf('5A-12').items[0].id, sent_text: 'hack' }) === null);
   ok(locked, 'a finished stage is read-only (log refuses new records)');
   ok(errors.length === 0, 'no console errors during the two playthroughs' + (errors.length ? ': ' + errors.join(' | ') : ''));
 
-  const said = await page.evaluate(() => Array.from(window.__said));
+  const said = Array.from(new Set(SAID_BEFORE_RELOAD.concat(await page.evaluate(() => Array.from(window.__said)))));
+  ok(said.some((t) => g2.facts.some((f) => f.place === t)), 'the second pupil heard this game\'s own place sentences');
   const missing = await page.evaluate((list) => list.filter((t) => !MR.speech.clip(t) && !/house|castle/.test(t)), said);
   ok(said.length > 30 && missing.length === 0, `every fixed line Pip said (${said.length}) has a pre-recorded clip` + (missing.length ? ': missing ' + JSON.stringify(missing) : ''));
 
@@ -262,6 +336,58 @@ async function playGame(page, classNo, difficulty, opts) {
   const usesNet = await p3.evaluate(() => { const v = speechSynthesis.getVoices(); return v.filter((x) => !x.localService).length; });
   ok(true, `network system voices present but never chosen (${usesNet} on this machine)`);
   await p3.close();
+
+  /* ---------- Speak: 10 s countdown next to the button (a stub recogniser stands in for the browser's) */
+  console.log('\n== microphone countdown');
+  const pm = await context.newPage();
+  const errorsM = [];
+  pm.on('pageerror', (e) => errorsM.push(e.message));
+  await pm.addInitScript(() => {
+    window.__fake = { text: 'turn left', final: false, starts: 0 };
+    class FakeRec {
+      start() {
+        if (this.on) throw new Error('InvalidStateError: already started');
+        this.on = true; window.__fake.starts++;
+        const f = window.__fake;
+        this.t = setTimeout(() => { if (this.on) this.emit(f.text, f.final); }, 300);
+      }
+      emit(text, final) { const r = [{ transcript: text, confidence: 0.9 }]; r.isFinal = final; if (this.onresult) this.onresult({ resultIndex: 0, results: [r] }); }
+      stop() { if (!this.on) return; this.on = false; clearTimeout(this.t); setTimeout(() => { this.emit(window.__fake.text, true); if (this.onend) this.onend(); }, 50); }
+      abort() { if (!this.on) return; this.on = false; clearTimeout(this.t); setTimeout(() => { if (this.onend) this.onend(); }, 20); }
+    }
+    window.SpeechRecognition = FakeRec; window.webkitSpeechRecognition = FakeRec;
+  });
+  await pm.goto(URL + '?fast=1&debug=guide');
+  await pm.waitForSelector('.mr-guide');
+  ok(await pm.isVisible('#mr-mic') && !(await pm.isVisible('#mr-mictimer')), 'Speak button shown, no countdown before it is pressed');
+  const t0 = Date.now();
+  await pm.click('#mr-mic');
+  ok(await pm.isVisible('#mr-mictimer') && (await pm.textContent('#mr-mictimer')).trim() === '10' && (await pm.textContent('#mr-mic')).trim() === 'Stop',
+    'Speak -> the button says "Stop" and a countdown ring shows 10 next to it');
+  const ringBox = await pm.$eval('#mr-mictimer', (e) => { const r = e.getBoundingClientRect(), m = document.getElementById('mr-mic').getBoundingClientRect(); return { gap: r.left - m.right, w: r.width, top: r.top, mtop: m.top, mh: m.height }; });
+  ok(ringBox.gap >= 0 && ringBox.gap < 30 && ringBox.w >= 44, `the ring sits right next to the Speak button (${Math.round(ringBox.gap)} px, ${Math.round(ringBox.w)} px wide)`);
+  await pm.waitForTimeout(3300);
+  const mid = Number((await pm.textContent('#mr-mictimer')).trim());
+  ok(mid >= 6 && mid <= 7 && (await pm.inputValue('#mr-input')) === 'turn left', `after 3.3 s it shows ${mid}; the words heard so far are in the box`);
+  await pm.waitForFunction(() => document.getElementById('mr-mic').textContent.trim() === 'Speak', null, { timeout: 9000 });
+  const took = Date.now() - t0;
+  const zero = await pm.evaluate(() => ({ shown: !document.getElementById('mr-mictimer').hidden, n: document.getElementById('mr-mictimer').textContent.trim() }));
+  ok(took >= 9600 && took <= 11000 && zero.n === '0' && !(await pm.evaluate(() => MR.ui.dialog.isListening())), `listening stops on its own at 0 (after ${(took / 1000).toFixed(1)} s), the ring shows 0`);
+  await pm.waitForTimeout(900);
+  ok(!(await pm.isVisible('#mr-mictimer')) && (await pm.inputValue('#mr-input')) === 'turn left', 'then the ring goes away and the words stay in the box to check and send');
+  await pm.fill('#mr-input', '');
+  await pm.evaluate(() => { window.__fake.text = 'go straight'; window.__fake.final = true; });
+  const t1 = Date.now();
+  await pm.click('#mr-mic');
+  await pm.waitForFunction(() => document.getElementById('mr-mic').textContent.trim() === 'Speak', null, { timeout: 6000 });
+  const quiet = Date.now() - t1;
+  ok(quiet < 4000 && (await pm.inputValue('#mr-input')) === 'go straight', `a finished phrase + a quiet moment stops listening early (${(quiet / 1000).toFixed(1)} s)`);
+  await pm.click('#mr-mic');
+  await pm.waitForTimeout(500);
+  await pm.click('#mr-mic');
+  ok(!(await pm.isVisible('#mr-mictimer')) && (await pm.textContent('#mr-mic')).trim() === 'Speak', 'pressing Stop ends listening at once');
+  ok(errorsM.length === 0, 'no page errors with the microphone');
+  await pm.close();
 
   /* ---------- broken AI */
   console.log('\n== broken AI');
@@ -277,10 +403,10 @@ async function playGame(page, classNo, difficulty, opts) {
   });
   await p2.goto(URL + '?fast=1&debug=ask&item=1');
   ok(!(await p2.isVisible('#mr-demo')), 'with a key the game is not in Demo mode');
-  let s = await send(p2, 'Where is the map?');
+  let s = await send(p2, 'Where is it?');
   ok(s === 'Sorry, can you say that again?' && (await factsOn(p2)).length === 0, 'empty AI content -> "Sorry, can you say that again?"');
   ok(!(await p2.isDisabled('#mr-input')), 'the pupil can speak again (game not stuck)');
-  s = await send(p2, 'Where is the map?');
+  s = await send(p2, 'Where is it?');
   const place = await p2.evaluate(() => MR.data.items[1].place);
   ok(calls === 2 && s === place, 'invalid JSON (2nd failure in a row) -> offline rules answer');
   ok(await p2.isVisible('#mr-demo'), 'switched to Demo mode after two failures');

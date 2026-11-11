@@ -1,6 +1,10 @@
 /* Maze Rescue - session state for ONE pupil (single player), persisted per class number.
  * Pure (uses MR.storage, no DOM). Requires core.js, data.js.
- * Several pupils may use one device one after another: each class number has its own saved session. */
+ * Several pupils may use one device one after another: each class number has its own saved session.
+ * Every new game gets a random `seed` (saved in the session). The seed decides the game's content (things, maps,
+ * warm-up, maze variants): whenever the current pupil changes, MR.data.useSession(seed) switches the content, so a
+ * resumed game always gets back exactly the same content. A session saved before seeds existed has no seed and
+ * plays the classic content (MR.data.useSession(null)). */
 (function (root) {
   'use strict';
   var MR = root.MR = root.MR || {};
@@ -11,7 +15,7 @@
   var state = MR.state = {};
   var cur = null;                        /* the live session object (see blank()) */
 
-  function blank(classNo, difficulty) {
+  function blank(classNo, difficulty, seed) {
     var items = {};
     MR.data.items.forEach(function (it) {
       items[it.id] = {
@@ -25,8 +29,9 @@
     var routes = {};
     MR.data.routeIds.forEach(function (r) { routes[r] = { reached: false, instructions: 0, trail: [] }; });
     return {
-      v: 1,
+      v: 2,
       session_id: MR.util.uid('s'),
+      seed: seed == null ? null : seed,           /* decides this game's content (MR.data.useSession) */
       class_no: classNo || '',
       difficulty: difficulty === 'simple' ? 'simple' : 'standard',
       storySeen: false,
@@ -42,6 +47,12 @@
     };
   }
   function sessions() { return MR.storage.get(KEY_SESSIONS) || {}; }
+  /** Switch MR.data to the content of the live session (classic content when there is none / no seed). */
+  function useContent() { MR.data.useSession(cur && cur.seed != null ? cur.seed : null, cur ? cur.difficulty : null); }
+  function toSeed(v) {
+    if (v === null || v === undefined || v === '' || isNaN(Number(v))) return null;
+    return Number(v) >>> 0;
+  }
   function changed() { state.save(); MR.emit('state:change', cur); }
   function itemState(itemId) {
     if (!cur) return null;
@@ -53,6 +64,7 @@
   state.init = function () {
     var classNo = MR.storage.get(KEY_CURRENT);
     cur = classNo ? (sessions()[classNo] || null) : null;
+    useContent();
     return cur;
   };
   /** The live session object, or null before Start. Treat as READ-ONLY outside state.js; use the methods below. */
@@ -61,20 +73,37 @@
   state.hasSaved = function (classNo) { return !!sessions()[MR.util.normClassNo(classNo)]; };
 
   /** Start or resume the session of this class number.
-   *  @param {{fresh?:boolean}} [opts]  fresh:true discards a saved session for this class number
+   *  A new game gets a new random seed (or opts.seed) and logs one 'session' record with the seed and its four things.
+   *  @param {{fresh?:boolean, seed?:number}} [opts]  fresh:true discards a saved session for this class number;
+   *         seed: use this seed for a NEW game (debug links ?seed=123, tests)
    *  @returns {{resumed:boolean, session:object}} */
   state.begin = function (classNo, difficulty, opts) {
+    opts = opts || {};
     classNo = MR.util.normClassNo(classNo);
     var all = sessions(), saved = all[classNo];
-    var resumed = !!saved && !(opts && opts.fresh);
-    cur = resumed ? saved : blank(classNo, difficulty);
+    var resumed = !!saved && !opts.fresh;
+    if (resumed) {
+      cur = saved;
+      useContent();
+    } else {
+      var seed = toSeed(opts.seed);
+      if (seed == null) seed = MR.data.newSeed();
+      cur = null;
+      MR.data.useSession(seed, difficulty);
+      cur = blank(classNo, difficulty, seed);
+    }
     if (resumed && difficulty && !cur.guide.routes.r1.instructions && !cur.guide.routes.r2.instructions) {
       cur.difficulty = difficulty === 'simple' ? 'simple' : 'standard';
     }
     MR.storage.set(KEY_CURRENT, classNo);
     changed();
+    if (!resumed && MR.log && MR.log.event) {
+      MR.log.event('start', 'session', { seed: cur.seed, difficulty: cur.difficulty, items: MR.data.sessionFacts() });
+    }
     return { resumed: resumed, session: cur };
   };
+  /** Seed of the live game (null before Start, or for a game saved before seeds existed). */
+  state.sessionSeed = function () { return cur && cur.seed != null ? cur.seed : null; };
   state.save = function () {
     if (!cur) return;
     cur.updatedAt = MR.util.nowISO();
@@ -82,16 +111,16 @@
     MR.storage.set(KEY_SESSIONS, all);
   };
   /** Leave the current pupil (their session stays saved) so the next pupil can type a class number. */
-  state.signOut = function () { cur = null; MR.storage.remove(KEY_CURRENT); MR.emit('state:change', null); };
+  state.signOut = function () { cur = null; MR.storage.remove(KEY_CURRENT); useContent(); MR.emit('state:change', null); };
   /** Delete the saved session of one class number (default: the current one). Logs are NOT touched. */
   state.reset = function (classNo) {
     classNo = classNo ? MR.util.normClassNo(classNo) : (cur && cur.class_no);
     var all = sessions(); delete all[classNo]; MR.storage.set(KEY_SESSIONS, all);
-    if (cur && cur.class_no === classNo) { cur = null; MR.storage.remove(KEY_CURRENT); }
+    if (cur && cur.class_no === classNo) { cur = null; MR.storage.remove(KEY_CURRENT); useContent(); }
     MR.emit('state:change', cur);
   };
   /** Delete every saved session on this device (teacher action). */
-  state.resetAll = function () { MR.storage.remove(KEY_SESSIONS); MR.storage.remove(KEY_CURRENT); cur = null; MR.emit('state:change', null); };
+  state.resetAll = function () { MR.storage.remove(KEY_SESSIONS); MR.storage.remove(KEY_CURRENT); cur = null; useContent(); MR.emit('state:change', null); };
 
   state.setDifficulty = function (d) { if (cur) { cur.difficulty = d === 'simple' ? 'simple' : 'standard'; changed(); } };
   state.markStorySeen = function () { if (cur) { cur.storySeen = true; changed(); } };
@@ -205,11 +234,11 @@
   state.setPref = function (key, value) { var p = state.prefs(); p[key] = value; MR.storage.set(KEY_PREFS, p); };
 
   /** Test / debug helper: build a session in a given situation without playing.
-   *  opts: {class_no, difficulty, warmup:boolean, items:n (collected), facts:'all'|'none'|['name',..] for the item in progress,
-   *         breakSeen:boolean, routes:n (finished), review:boolean} */
+   *  opts: {class_no, difficulty, seed (the game's content; default random), warmup:boolean, items:n (collected),
+   *         facts:'all'|'none'|['name',..] for the item in progress, breakSeen:boolean, routes:n (finished), review:boolean} */
   state.seed = function (opts) {
     opts = opts || {};
-    state.begin(opts.class_no || 'TEST-1', opts.difficulty || 'standard', { fresh: true });
+    state.begin(opts.class_no || 'TEST-1', opts.difficulty || 'standard', { fresh: true, seed: opts.seed });
     if (opts.warmup) cur.warmup = { done: true, correct: 8, total: 10 };
     cur.storySeen = true;
     var n = Math.min(opts.items || 0, MR.data.items.length), i;

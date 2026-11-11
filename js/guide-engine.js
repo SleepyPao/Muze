@@ -2,14 +2,15 @@
  * The game (this file) decides everything: whether a move is possible, wall hits, the exit. The AI only parses.
  *
  * LEFT / RIGHT RULE (documented in docs/ARCHITECTURE.md, "Left / right rule"):
- *   - "left" / "right" always mean PIP'S left / right. That is the convention the pupils are learning.
- *   - The only time it is really confusing is when Pip faces the viewer (facing 'S'): his left is the pupil's right.
- *     The FIRST time in a route that an unqualified turn would run while Pip faces 'S', Pip does not turn; he asks
- *     "My left or your left?" (status 'clarify', kind 'whose'). It is asked at most ONCE per route (run.whoseAsked).
- *   - The pupil answers "your left" (Pip's own left) or "my left" (the pupil's = screen side). A pupil-side turn while
- *     Pip faces 'S' is mirrored, and Pip says "OK! Your left is my right now." (result.note) so the pupil learns why.
- *   - A turn that already says "your left" / "my left" never triggers the question.
- *   - When Pip faces N, E or W a pupil-side ("my") turn is treated as Pip's own side (no mirroring).
+ *   - When Pip faces away from the viewer (N) the pupil's left IS Pip's left: no problem.
+ *   - When Pip faces the viewer (S), "left" can mean two things (spec 4.4). The first unqualified turn in that
+ *     position makes Pip ask "My left or your left?" (status 'clarify', kind 'whose'). Pip does not turn yet.
+ *   - The pupil answers "your left" (= Pip's own left) or "my left" (= the pupil's left, the screen side).
+ *     Pip REMEMBERS the answer for the rest of the route (run.whoseMode = 'your' | 'my') and never asks again:
+ *     every later unqualified turn while facing S follows the same meaning, so Pip never silently switches.
+ *   - A pupil-side turn while facing S is mirrored. The first time, Pip says "OK! Your left is my right now."
+ *   - A turn that already says "your left" / "my left" is never questioned (said while facing S, it sets the mode).
+ *   - When Pip faces E or W a turn is Pip's own turn (pupil-side left/right would mean "go backwards").
  */
 (function (root) {
   'use strict';
@@ -21,12 +22,12 @@
   guide.MAX_STEPS = 20;
 
   /** A fresh run for one route. The run object is the single source of truth for Pip in the Guide stage.
-   *  @returns {{mazeId, x, y, facing, trail:[{x,y}], whoseAsked:boolean, finished:boolean, instructions:number, wallHits:number}} */
+   *  @returns {{mazeId, x, y, facing, trail:[{x,y}], whoseAsked:boolean, whoseMode:(null|'your'|'my'), finished:boolean, instructions:number, wallHits:number}} */
   guide.newRun = function (mz) {
     return {
       mazeId: mz.id, x: mz.start.x, y: mz.start.y, facing: mz.start.facing,
       trail: [{ x: mz.start.x, y: mz.start.y }],
-      whoseAsked: false, finished: false, instructions: 0, wallHits: 0
+      whoseAsked: false, whoseMode: null, finished: false, instructions: 0, wallHits: 0
     };
   };
 
@@ -130,16 +131,22 @@
       if (a.type === 'stop') { res.steps.push({ type: 'stop' }); res.executed++; break; }
 
       if (a.type === 'turn') {
-        var dir = a.dir;
-        if (!a.whose && run.facing === 'S' && !run.whoseAsked) {
-          run.whoseAsked = true;
-          res.status = 'clarify'; res.say = T.whose(dir);
-          res.clarify = { kind: 'whose', text: res.say, dir: dir };
-          res.pending = actions.slice(i);
-          return res;
+        var dir = a.dir, whose = a.whose || null;
+        if (run.facing === 'S' && !whose) {
+          if (!run.whoseMode) {
+            run.whoseAsked = true;
+            res.status = 'clarify'; res.say = T.whose(dir);
+            res.clarify = { kind: 'whose', text: res.say, dir: dir };
+            res.pending = actions.slice(i);
+            return res;
+          }
+          whose = run.whoseMode;                                /* the pupil already told Pip what "left" means */
         }
-        if (a.whose === 'my' && run.facing === 'S') { dir = dir === 'left' ? 'right' : 'left'; res.note = T.whoseNote(a.dir); }
-        if (a.whose) run.whoseAsked = true;
+        if (whose === 'my' && run.facing === 'S') {
+          dir = dir === 'left' ? 'right' : 'left';
+          if (run.whoseMode !== 'my') res.note = T.whoseNote(a.dir); /* explain only the first time */
+        }
+        if (a.whose && run.facing === 'S') { run.whoseAsked = true; run.whoseMode = a.whose; }   /* the answer (facing the viewer) sets the meaning */
         run.facing = maze.turn(run.facing, dir);
         res.steps.push({ type: 'turn', dir: dir, facing: run.facing });
         res.executed++;
@@ -197,6 +204,9 @@
     return out;
   };
   function findMaze(mazeId, routeId) {
+    /* a game's own maze variant (mirrored / landmarks moved) is rebuilt from its id alone, e.g. 'r1_standard~m1~p30152' */
+    var v = mazeId && MR.data.guideMazeById ? MR.data.guideMazeById(mazeId) : null;
+    if (v && v.routeId === routeId) return v;
     var r = MR.data.guideMazes[routeId];
     if (!r) return null;
     if (mazeId) for (var k in r) if (r[k].id === mazeId) return r[k];

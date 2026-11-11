@@ -1,7 +1,10 @@
 /* Guide (spec 4.4): the pupil sees the whole maze, Pip and the exit, and tells Pip the way in English.
  * MR.ai.guide (or the offline rules) turns the words into a few allowed actions; MR.guide.execute (the game, not
  * the AI) checks and runs them. Pip asks when the words are not enough ("Left or right?", "My left or your left?",
- * "I can't see a tree. What can I see?"). A wall stops Pip ("There is a wall.") - never game over. */
+ * "I can't see a tree. What can I see?"). A wall stops Pip ("There is a wall.") - never game over.
+ * Side panel: the task + "Start again", the legend (MR.legend: the name of every landmark; tap = it blinks on the map),
+ * the hint box and "What I said". Hints come from where Pip is NOW (js/guide-hint.js): 1st click = what Pip can see,
+ * 2nd click = the next good instruction. The level goes back to 1 after Pip moves. */
 (function (root) {
   'use strict';
   var MR = root.MR, ui = MR.ui, el = ui.el;
@@ -24,29 +27,29 @@
       var empty = el('p', { class: 'mr-guide__empty', text: 'Your words will be here.' });
       var restart = ui.button('Start again', function () { restartRun(true); }, 'small');
       restart.id = 'mr-guide-restart';
-      var hintBox = el('div', { class: 'mr-hintbox', hidden: true, attrs: { 'aria-live': 'polite' } });
-      rootEl.appendChild(el('div', { class: 'mr-guide' }, [
-        box,
-        el('div', { class: 'mr-guide__side' }, [
-          el('div', { class: 'mr-card mr-guide__task' }, [
-            el('h3', { class: 'mr-card__title', text: 'Way out ' + (ri + 1) + ' of 2' }),
-            el('p', { text: 'Tell Pip how to get to the gate.' }),
-            el('p', { class: 'mr-guide__legend' }, [el('span', { class: 'mr-guide__arrow', text: '▲' }), ' shows where Pip is looking.'])
-          ]),
-          hintBox,
-          el('div', { class: 'mr-card mr-guide__history' }, [el('h3', { class: 'mr-card__title', text: 'What I said' }), empty, list]),
-          el('div', { class: 'mr-guide__tools' }, [restart])
-        ])
-      ]));
+      var hintBox = el('div', { class: 'mr-hintbox mr-guide__hint', hidden: true, attrs: { 'aria-live': 'polite' } });
+      var side = el('div', { class: 'mr-guide__side' }, [
+        el('div', { class: 'mr-card mr-guide__task' }, [
+          el('div', { class: 'mr-guide__taskhead' }, [el('h3', { class: 'mr-card__title', text: 'Way out ' + (ri + 1) + ' of 2' }), restart]),
+          el('p', { text: 'Tell Pip how to get to the gate.' }),
+          el('p', { class: 'mr-guide__legend' }, [el('span', { class: 'mr-guide__arrow', text: '▲' }), ' shows where Pip is looking.'])
+        ]),
+        hintBox,
+        el('div', { class: 'mr-card mr-guide__history' }, [el('h3', { class: 'mr-card__title', text: 'What I said' }), empty, list])
+      ]);
+      rootEl.appendChild(el('div', { class: 'mr-guide' }, [box, side]));
 
       scene = MR.render.createScene(box, mz, { facingArrow: true, showExit: true, label: 'The maze with the way out' });
       var sc = scene;
-      var run, pending = null, ctx = {}, busy = false;
+      side.insertBefore(MR.legend.create(mz, sc, { compact: true }), hintBox);
+      var run, pending = null, ctx = {}, busy = false, hintLevel = 0;
 
       function live() { return token === alive && sc === scene; }
       function restartRun(logIt) {
         run = MR.guide.newRun(mz);
         pending = null; ctx = {};
+        hintLevel = 0; sc.hideLabels();
+        if (!hintBox.hidden) { hintBox.hidden = true; sc.resize(); }
         sc.setPip(run.x, run.y, run.facing);
         sc.clearTrail();
         list.innerHTML = ''; empty.hidden = false;
@@ -82,22 +85,29 @@
       ui.dialog.say(ri === 0 ? T.guideOpen : 'Now the other way out. Help me again!', { emotion: 'neutral' });
       ui.dialog.focus();
 
+      /* Hints are worked out from where Pip is now, so they are always true. Click 1: what Pip can see.
+       * Click 2 (and more): the next good instruction. Back to click 1 after Pip moves. */
       ui.dialog.onHint(function () {
-        var level = Math.min(2, (hintBox._level || 0) + 1);
-        hintBox._level = level;
-        var text = MR.data.guideHints[level];
-        MR.log.hint({ stage: 'guide', route_id: rid, hint_level: level, text: text });
+        if (busy || run.finished) return;
+        hintLevel = Math.min(2, hintLevel + 1);
+        var h = hintLevel === 1 ? MR.guide.lookHint(mz, run) : MR.guide.nextStep(mz, run, { pending: pending });
+        MR.log.hint({ stage: 'guide', route_id: rid, hint_level: hintLevel, text: h.text });
         hintBox.innerHTML = '';
-        hintBox.appendChild(el('span', { class: 'mr-hintbox__tag', text: 'Hint' }));
-        hintBox.appendChild(el('span', { class: 'mr-hintbox__text', text: text }));
+        hintBox.appendChild(el('span', { class: 'mr-hintbox__tag', text: 'Hint ' + hintLevel }));
+        hintBox.appendChild(el('span', { class: 'mr-hintbox__text', text: h.text }));
         hintBox.hidden = false;
+        sc.resize();                 /* the side panel grew: in the one-column layout the map box is smaller now */
+        /* show on the map what the hint talks about */
+        var spots = hintLevel === 1 ? h.visible : (h.landmark ? [h.landmark] : []);
+        spots.forEach(function (v) { sc.ping(v.x, v.y, { ms: 2600 }); sc.showLabel(v.x, v.y, v.name, 2800); });
+        if (hintLevel === 1) h.at.forEach(function (v) { sc.showLabel(v.x, v.y, v.name, 2800); });   /* next to Pip: name only, no frame over Pip */
         ui.dialog.focus();
       });
 
       ui.dialog.onSend(function (payload) {
         if (busy || run.finished) return;
         busy = true;
-        hintBox.hidden = true;
+        if (!hintBox.hidden) { hintBox.hidden = true; sc.resize(); }
         ui.dialog.setBusy(true);
         ui.dialog.say('…', { speak: false, instant: true });
         MR.ai.guide({ text: payload.text, run: { x: run.x, y: run.y, facing: run.facing }, visible: MR.guide.visibleNames(mz, run), ctx: ctx })
@@ -129,6 +139,7 @@
             }
             var res = MR.guide.execute(mz, run, actions);
             var asked = res.status === 'clarify' || res.status === 'invalid';
+            if (res.steps.some(function (st) { return st.type === 'move' || st.type === 'turn'; })) hintLevel = 0;   /* Pip moved: hints start again at 1 */
             MR.log.guideTurn(Object.assign(base, { parsed_actions: actions, clarify_triggered: asked, hit_wall: res.hit_wall, reached_exit: res.reached_exit,
               ai_reply: res.say || 'OK', note: res.note || '' }));
             addHistory(payload.text, res.status === 'exit' ? 'exit' : (res.status === 'wall' ? 'wall' : (asked ? 'ask' : 'ok')));

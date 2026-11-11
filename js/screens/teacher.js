@@ -21,6 +21,25 @@
     return s;
   }
 
+  /** This pupil's own four things (every game is different): icon in the pupil's colour + the three facts. */
+  function thingsCard(classNo) {
+    var sess = MR.log.sessionOf(classNo);
+    var card = el('div', { class: 'mr-card mr-teach__things', attrs: { style: 'margin-bottom:12px' } }, [el('h4', { class: 'mr-card__title',
+      text: 'This pupil’s things' + (sess && sess.seed != null ? ' (game ' + sess.seed + ')' : '') })]);
+    if (!sess || !sess.items.length) { card.appendChild(el('p', { class: 'mr-teach__muted', text: 'Not recorded (older game).' })); return card; }
+    var list = el('ol', { class: 'mr-teach__thinglist', attrs: { style: 'margin:0;padding-left:20px;display:grid;gap:6px' } });
+    sess.items.forEach(function (it) {
+      /* an <img> (not a canvas): the icon is drawn in the colour this pupil had */
+      var icon = el('img', { class: 'mr-teach__thingicon', alt: it.id, width: 32, height: 32,
+        attrs: { style: 'image-rendering:pixelated;vertical-align:middle;margin-right:6px' } });
+      try { icon.src = MR.sprites.item(it.id, it.colour).toDataURL(); } catch (e) { /* no icon */ }
+      list.appendChild(el('li', { class: 'mr-teach__thing', dataset: { item: it.id } }, [icon,
+        el('span', {}, [el('b', { text: it.name + ' ' }), el('span', { text: it.look + ' ' }), el('span', { text: it.place })])]));
+    });
+    card.appendChild(list);
+    return card;
+  }
+
   function details(classNo) {
     var entries = MR.log.forStudent(classNo);
     var wrap = el('div', { class: 'mr-teach__details' });
@@ -36,7 +55,8 @@
     tbl.appendChild(el('thead', {}, el('tr', {}, ['Time', 'Stage', 'Thing / route', 'Pupil said', 'Speech heard', 'Pip / result', 'Flags'].map(function (h) { return el('th', { text: h }); }))));
     var tb = el('tbody');
     entries.forEach(function (e) {
-      var said = e.sent_text || (e.event === 'junction' ? 'clicked: ' + (e.choice_label || ('path ' + e.choice)) : (e.event === 'hint' ? 'Hint ' + e.hint_level : e.event));
+      var said = e.sent_text || (e.event === 'junction' ? 'clicked: ' + (e.choice_label || ('path ' + e.choice)) : (e.event === 'hint' ? 'Hint ' + e.hint_level :
+        (e.event === 'session' ? 'new game ' + (e.seed != null ? e.seed : '') : e.event)));
       var flags = [];
       if (e.category) flags.push(e.category);
       if (e.fact_given) flags.push('fact: ' + e.fact_given);
@@ -50,7 +70,8 @@
       if (e.ai_failed) flags.push('AI failed (not counted)');
       if (e.parsed_actions && e.parsed_actions.length) flags.push(e.parsed_actions.map(function (a) { return a.type === 'turn' ? 'turn ' + (a.whose ? a.whose + ' ' : '') + a.dir : (a.type === 'forward' ? 'forward' + (a.steps ? ' ' + a.steps : '') + (a.until ? ' to ' + a.until : '') : a.type); }).join(', '));
       var asr = e.input_mode === 'speech' ? (e.asr_text || '') + (e.asr_text && e.asr_text !== e.sent_text ? ' (edited)' : '') : '';
-      var reply = e.ai_reply || (e.event === 'summary' ? e.correct + ' / ' + e.total + ' right' : (e.event === 'self_review' ? JSON.stringify(e.answers) : ''));
+      var reply = e.ai_reply || (e.event === 'summary' ? e.correct + ' / ' + e.total + ' right' : (e.event === 'self_review' ? JSON.stringify(e.answers) :
+        (e.event === 'session' ? (e.items || []).map(function (it) { return it.id; }).join(', ') + (e.difficulty ? ' · ' + e.difficulty : '') : '')));
       tb.appendChild(el('tr', { class: 'is-' + e.stage }, [
         el('td', { text: (e.timestamp || '').slice(11, 19) }), el('td', { text: e.stage }), el('td', { text: e.item_id || e.route_id || '' }),
         el('td', { text: said }), el('td', { text: asr }), el('td', { text: reply }), el('td', { text: flags.join(' · ') })
@@ -63,7 +84,8 @@
     var rep = MR.guide.replay(entries);
     MR.data.routeIds.forEach(function (rid, ri) {
       var r = rep[rid];
-      var mz = r ? (MR.data.guideMazes[rid].standard.id === r.mazeId ? MR.data.guideMazes[rid].standard : MR.data.guideMazes[rid].simple) : MR.data.guideMaze(rid, 'standard');
+      /* the maze this pupil really had (each game mirrors / re-arranges the mazes); rebuilt from the logged maze id */
+      var mz = (r && MR.data.guideMazeById(r.mazeId)) || MR.data.guideMazes[rid].standard;
       var box = el('div', { class: 'mr-scene-box mr-teach__scene' });
       var card = el('div', { class: 'mr-card mr-teach__replay' }, [el('h4', { class: 'mr-card__title', text: 'Route ' + (ri + 1) + (r ? (r.reached ? ' — exit reached' : ' — not finished') : ' — not started') }), box]);
       replays.appendChild(card);
@@ -80,7 +102,7 @@
       }
     });
 
-    wrap.appendChild(el('div', { class: 'mr-teach__top' }, [notes, replays]));
+    wrap.appendChild(el('div', { class: 'mr-teach__top' }, [el('div', { class: 'mr-teach__left' }, [thingsCard(classNo), notes]), replays]));
     wrap.appendChild(el('div', { class: 'mr-teach__logwrap' }, tbl));
     return wrap;
   }
@@ -169,6 +191,8 @@
       rootEl.appendChild(el('div', { class: 'mr-teach' }, [
         el('div', { class: 'mr-teach__bar' }, [el('h2', { class: 'mr-h2', text: 'Teacher view' }), el('span', { class: 'mr-teach__mode', text: 'AI: ' + MR.ai.mode() }),
           el('div', { class: 'mr-row mr-teach__btns' }, [bJson, bImp, bCsv, bAi, bClear, bBack])]),
+        root.location.protocol === 'file:' ? el('p', { class: 'mr-teach__tip', text: 'Microphone tip: the game is open as a file, so Chrome asks for the microphone every time. ' +
+          'Double-click start-mac.command (Mac) or start-windows.bat (Windows) instead: the game opens at http://localhost:8787/ and you can choose “Allow on every visit”.' }) : null,
         body
       ]));
       table(body);

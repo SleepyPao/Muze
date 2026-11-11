@@ -3,99 +3,103 @@
 window.MR_VOICE = {
  "Ask Pip good questions. Then help Pip find the way.": [
   "assets/voice/56f2fbd368bf.mp3",
-  3.68
+  3.52
  ],
  "Dead end. Go back and ask Pip again.": [
   "assets/voice/0564031c9bfe.mp3",
-  2.88
+  2.76
  ],
  "Do you mean what I need?": [
   "assets/voice/0aaa7c7a3e27.mp3",
-  1.25
+  1.34
  ],
  "Do you mean what it looks like?": [
   "assets/voice/1a5331bb1616.mp3",
-  1.35
+  1.38
  ],
  "Do you mean where it is?": [
   "assets/voice/0f1e1d935a3a.mp3",
-  1.31
+  1.17
  ],
  "Done! Where next?": [
   "assets/voice/fe15604d2fac.mp3",
-  1.58
+  1.68
  ],
  "Go straight. Do not turn.": [
   "assets/voice/e0ae430052b2.mp3",
-  2.19
+  2.1
+ ],
+ "Go through the green door.": [
+  "assets/voice/705c9414a838.mp3",
+  1.51
  ],
  "Go through the red door.": [
   "assets/voice/5bbac898d8e4.mp3",
-  1.45
+  1.32
  ],
  "Great! Now I need your help.": [
   "assets/voice/d46e619ce552.mp3",
-  2.15
+  2.0
  ],
  "Help me find it! Click a path.": [
   "assets/voice/2a724debd5b9.mp3",
-  2.38
+  2.43
  ],
  "I am here already.": [
   "assets/voice/d9b6d4daec34.mp3",
-  1.61
+  1.57
  ],
  "I am lost, so please ask me about the thing I need.": [
   "assets/voice/51ef8d7eecde.mp3",
-  3.63
+  3.75
  ],
  "I am out! Thank you!": [
   "assets/voice/27b7ac32c7e7.mp3",
-  1.92
+  1.86
  ],
  "I can see it!": [
   "assets/voice/00e775aa2eae.mp3",
-  1.02
+  1.09
  ],
  "I can’t see a bench. What can I see?": [
   "assets/voice/5acfa2bc5f6c.mp3",
-  2.69
+  2.75
  ],
  "I can’t see a bridge. What can I see?": [
   "assets/voice/c76d2db75ef0.mp3",
-  2.77
+  2.89
  ],
  "I can’t see a door. What can I see?": [
   "assets/voice/471161f0dce6.mp3",
-  2.75
+  2.61
  ],
  "I can’t see a fountain. What can I see?": [
   "assets/voice/9522e544f4a4.mp3",
-  3.04
+  2.73
  ],
  "I can’t see a green door. What can I see?": [
   "assets/voice/b5b8ef28c807.mp3",
-  3.11
+  3.09
  ],
  "I can’t see a red door. What can I see?": [
   "assets/voice/392b3cbb1a1c.mp3",
-  2.77
+  2.79
  ],
  "I can’t see a scarecrow. What can I see?": [
   "assets/voice/e23dc873624c.mp3",
-  2.84
+  2.96
  ],
  "I can’t see a tree. What can I see?": [
   "assets/voice/3b26abc00b17.mp3",
-  2.52
+  2.45
  ],
  "I can’t see a well. What can I see?": [
   "assets/voice/c423b48d6562.mp3",
-  2.54
+  2.62
  ],
  "I can’t see a windmill. What can I see?": [
   "assets/voice/0e8f8836c8ff.mp3",
-  2.8
+  2.73
  ],
  "I can’t see an exit. What can I see?": [
   "assets/voice/4c1208062ef3.mp3",
@@ -103,174 +107,578 @@ window.MR_VOICE = {
  ],
  "I can’t see the way out. Tell me where to go!": [
   "assets/voice/602c5b2f6fde.mp3",
-  2.66
+  2.52
  ],
  "I got it! Thank you!": [
   "assets/voice/89476d46c21d.mp3",
-  1.81
+  1.74
  ],
  "I need a bag.": [
   "assets/voice/aa89de1b09b3.mp3",
-  1.04
+  1.03
+ ],
+ "I need a ball.": [
+  "assets/voice/236bc8c073bf.mp3",
+  1.02
+ ],
+ "I need a book.": [
+  "assets/voice/c3ee14f63524.mp3",
+  1.0
+ ],
+ "I need a cup.": [
+  "assets/voice/75560f9e1f89.mp3",
+  1.0
+ ],
+ "I need a hat.": [
+  "assets/voice/a86ad3529624.mp3",
+  1.11
  ],
  "I need a key.": [
   "assets/voice/dbf8931462fa.mp3",
-  1.11
+  1.09
  ],
  "I need a lamp.": [
   "assets/voice/a9d92791a024.mp3",
-  1.07
+  1.1
  ],
  "I need a map.": [
   "assets/voice/2aa594b3fb86.mp3",
-  1.01
+  1.02
  ],
  "I need one more thing. Ask me!": [
   "assets/voice/a0687ef997a2.mp3",
-  2.61
+  2.36
  ],
  "I need something. Ask me!": [
   "assets/voice/01fd0c4a43ec.mp3",
-  2.17
+  2.14
+ ],
+ "It is behind the green door, next to the bench.": [
+  "assets/voice/a2c9ff76a7af.mp3",
+  3.42
+ ],
+ "It is behind the green door, next to the big tree.": [
+  "assets/voice/7ff11e14defe.mp3",
+  3.19
+ ],
+ "It is behind the green door, next to the blue fountain.": [
+  "assets/voice/0f4c50e1d25c.mp3",
+  3.58
+ ],
+ "It is behind the green door, next to the scarecrow.": [
+  "assets/voice/fd6a7bd1938c.mp3",
+  3.69
+ ],
+ "It is behind the green door, next to the well.": [
+  "assets/voice/10c87a3ed251.mp3",
+  3.22
+ ],
+ "It is behind the green door, next to the windmill.": [
+  "assets/voice/c989f1d0491f.mp3",
+  3.27
+ ],
+ "It is behind the red door, next to the bench.": [
+  "assets/voice/f8583a20bebd.mp3",
+  3.11
+ ],
+ "It is behind the red door, next to the big tree.": [
+  "assets/voice/f9621d6583dd.mp3",
+  3.17
  ],
  "It is behind the red door, next to the blue fountain.": [
   "assets/voice/0070acf9864e.mp3",
-  3.59
+  3.83
+ ],
+ "It is behind the red door, next to the scarecrow.": [
+  "assets/voice/5d074c82ccfa.mp3",
+  3.34
+ ],
+ "It is behind the red door, next to the well.": [
+  "assets/voice/ca2574631d83.mp3",
+  3.16
+ ],
+ "It is behind the red door, next to the windmill.": [
+  "assets/voice/06be260bc9e0.mp3",
+  3.12
+ ],
+ "It is between the bench and the blue fountain, behind the green door.": [
+  "assets/voice/2dab7d3fdaf8.mp3",
+  3.51
+ ],
+ "It is between the bench and the blue fountain, behind the red door.": [
+  "assets/voice/4219b9a85cd9.mp3",
+  3.75
+ ],
+ "It is between the bench and the scarecrow, behind the green door.": [
+  "assets/voice/db0107df77a6.mp3",
+  3.84
+ ],
+ "It is between the bench and the scarecrow, behind the red door.": [
+  "assets/voice/8337e80016b8.mp3",
+  3.87
+ ],
+ "It is between the bench and the well, behind the green door.": [
+  "assets/voice/6022f00a200b.mp3",
+  3.07
+ ],
+ "It is between the bench and the well, behind the red door.": [
+  "assets/voice/ba19baf032b2.mp3",
+  3.05
  ],
  "It is between the big tree and the well, behind the green door.": [
   "assets/voice/f5054e9d017f.mp3",
-  3.04
+  3.19
+ ],
+ "It is between the blue fountain and the bench, behind the green door.": [
+  "assets/voice/359ebf4f8741.mp3",
+  4.02
+ ],
+ "It is between the blue fountain and the bench, behind the red door.": [
+  "assets/voice/7214cfdb61dc.mp3",
+  3.74
+ ],
+ "It is between the blue fountain and the scarecrow, behind the green door.": [
+  "assets/voice/db0a3903be81.mp3",
+  4.28
+ ],
+ "It is between the blue fountain and the scarecrow, behind the red door.": [
+  "assets/voice/0a55b3b30284.mp3",
+  4.37
+ ],
+ "It is between the blue fountain and the well, behind the green door.": [
+  "assets/voice/c42236da7a9f.mp3",
+  3.44
+ ],
+ "It is between the blue fountain and the well, behind the red door.": [
+  "assets/voice/b4a7e61eb2ae.mp3",
+  3.53
+ ],
+ "It is between the scarecrow and the bench, behind the green door.": [
+  "assets/voice/be0496cf3477.mp3",
+  3.97
+ ],
+ "It is between the scarecrow and the bench, behind the red door.": [
+  "assets/voice/ac157f7f118d.mp3",
+  4.13
+ ],
+ "It is between the scarecrow and the blue fountain, behind the green door.": [
+  "assets/voice/12ca870ec04f.mp3",
+  4.34
+ ],
+ "It is between the scarecrow and the blue fountain, behind the red door.": [
+  "assets/voice/a9467e6f9796.mp3",
+  4.34
+ ],
+ "It is between the scarecrow and the well, behind the green door.": [
+  "assets/voice/b61531e329f3.mp3",
+  3.51
+ ],
+ "It is between the scarecrow and the well, behind the red door.": [
+  "assets/voice/89baa2d3626b.mp3",
+  3.69
+ ],
+ "It is between the well and the bench, behind the green door.": [
+  "assets/voice/395db2153180.mp3",
+  3.22
+ ],
+ "It is between the well and the bench, behind the red door.": [
+  "assets/voice/bfccd8fd9300.mp3",
+  3.02
+ ],
+ "It is between the well and the blue fountain, behind the green door.": [
+  "assets/voice/02708a2fd6ff.mp3",
+  3.55
+ ],
+ "It is between the well and the blue fountain, behind the red door.": [
+  "assets/voice/4858844944a8.mp3",
+  3.59
+ ],
+ "It is between the well and the scarecrow, behind the green door.": [
+  "assets/voice/c95ef99036e1.mp3",
+  3.98
+ ],
+ "It is between the well and the scarecrow, behind the red door.": [
+  "assets/voice/d05e83ae5adb.mp3",
+  3.83
+ ],
+ "It is big and blue.": [
+  "assets/voice/fe30eb2e559e.mp3",
+  1.65
+ ],
+ "It is big and brown.": [
+  "assets/voice/e15a85ddf4df.mp3",
+  1.52
  ],
  "It is big and green.": [
   "assets/voice/626cb7982dfc.mp3",
-  1.64
+  1.68
+ ],
+ "It is big and orange.": [
+  "assets/voice/0244faeb4f61.mp3",
+  1.76
+ ],
+ "It is big and pink.": [
+  "assets/voice/be14b854147c.mp3",
+  1.36
+ ],
+ "It is big and purple.": [
+  "assets/voice/bd343eee23fb.mp3",
+  1.46
+ ],
+ "It is big and red.": [
+  "assets/voice/7c8ea06805d4.mp3",
+  1.57
+ ],
+ "It is big and yellow.": [
+  "assets/voice/ca15100a50f1.mp3",
+  1.67
+ ],
+ "It is next to the bench, opposite the blue fountain.": [
+  "assets/voice/4d9ab2a4f46c.mp3",
+  2.84
+ ],
+ "It is next to the bench, opposite the scarecrow.": [
+  "assets/voice/4d340325527b.mp3",
+  3.1
+ ],
+ "It is next to the bench, opposite the well.": [
+  "assets/voice/1462d9f9bd8b.mp3",
+  2.24
+ ],
+ "It is next to the blue fountain, opposite the bench.": [
+  "assets/voice/fe77dc7e0022.mp3",
+  2.89
+ ],
+ "It is next to the blue fountain, opposite the scarecrow.": [
+  "assets/voice/f377dbc31838.mp3",
+  3.16
+ ],
+ "It is next to the blue fountain, opposite the well.": [
+  "assets/voice/9999b45ba97b.mp3",
+  2.88
  ],
  "It is next to the scarecrow, opposite the bench.": [
   "assets/voice/988e4b6e9c4f.mp3",
-  3.02
+  3.04
+ ],
+ "It is next to the well, opposite the bench.": [
+  "assets/voice/c77a036d0f82.mp3",
+  2.57
+ ],
+ "It is next to the well, opposite the blue fountain.": [
+  "assets/voice/92d70fc20401.mp3",
+  2.77
+ ],
+ "It is next to the well, opposite the scarecrow.": [
+  "assets/voice/28238cd029bf.mp3",
+  2.71
  ],
  "It is old and brown.": [
   "assets/voice/f2a86dbe73a4.mp3",
-  1.65
+  1.6
+ ],
+ "It is opposite the bench, in front of the big tree.": [
+  "assets/voice/45e225e7b2bf.mp3",
+  2.72
+ ],
+ "It is opposite the bench, in front of the blue fountain.": [
+  "assets/voice/fb331b3dabb9.mp3",
+  3.48
+ ],
+ "It is opposite the bench, in front of the scarecrow.": [
+  "assets/voice/0bd0f67f37d2.mp3",
+  3.23
+ ],
+ "It is opposite the bench, in front of the well.": [
+  "assets/voice/481626f170b0.mp3",
+  2.47
+ ],
+ "It is opposite the bench, in front of the windmill.": [
+  "assets/voice/18cce64f7c19.mp3",
+  2.79
+ ],
+ "It is opposite the blue fountain, in front of the bench.": [
+  "assets/voice/47eca6eebe96.mp3",
+  3.63
+ ],
+ "It is opposite the blue fountain, in front of the big tree.": [
+  "assets/voice/bedcf51e5635.mp3",
+  3.27
+ ],
+ "It is opposite the blue fountain, in front of the scarecrow.": [
+  "assets/voice/d0297a05bae0.mp3",
+  3.95
+ ],
+ "It is opposite the blue fountain, in front of the well.": [
+  "assets/voice/e085d0f155cf.mp3",
+  3.59
+ ],
+ "It is opposite the blue fountain, in front of the windmill.": [
+  "assets/voice/75b1d9b7b4aa.mp3",
+  3.82
+ ],
+ "It is opposite the scarecrow, in front of the bench.": [
+  "assets/voice/19905f48bad0.mp3",
+  3.24
+ ],
+ "It is opposite the scarecrow, in front of the big tree.": [
+  "assets/voice/4ff89f0d5818.mp3",
+  3.53
+ ],
+ "It is opposite the scarecrow, in front of the blue fountain.": [
+  "assets/voice/d0109c56d767.mp3",
+  3.83
+ ],
+ "It is opposite the scarecrow, in front of the well.": [
+  "assets/voice/fab434aa3199.mp3",
+  3.36
+ ],
+ "It is opposite the scarecrow, in front of the windmill.": [
+  "assets/voice/c519c5a96b0a.mp3",
+  3.2
+ ],
+ "It is opposite the well, in front of the bench.": [
+  "assets/voice/b128c2bd3f7b.mp3",
+  2.71
+ ],
+ "It is opposite the well, in front of the big tree.": [
+  "assets/voice/93572d697391.mp3",
+  2.62
+ ],
+ "It is opposite the well, in front of the blue fountain.": [
+  "assets/voice/32b6bb77d5ab.mp3",
+  3.18
+ ],
+ "It is opposite the well, in front of the scarecrow.": [
+  "assets/voice/b69adb23868a.mp3",
+  2.96
+ ],
+ "It is opposite the well, in front of the windmill.": [
+  "assets/voice/7e3702ca8a9c.mp3",
+  2.79
  ],
  "It is opposite the windmill, in front of the big tree.": [
   "assets/voice/34bb5ec29294.mp3",
-  3.12
+  3.45
  ],
  "It is red and very bright.": [
   "assets/voice/2823c49f12a1.mp3",
-  2.04
+  2.14
+ ],
+ "It is small and blue.": [
+  "assets/voice/0aa8a8ddd948.mp3",
+  1.73
+ ],
+ "It is small and brown.": [
+  "assets/voice/fea0ce2f165f.mp3",
+  1.72
+ ],
+ "It is small and green.": [
+  "assets/voice/04d1f3f75370.mp3",
+  1.51
+ ],
+ "It is small and orange.": [
+  "assets/voice/61f4c8a35b85.mp3",
+  1.76
+ ],
+ "It is small and pink.": [
+  "assets/voice/5ea9f8d28f9c.mp3",
+  1.5
+ ],
+ "It is small and purple.": [
+  "assets/voice/93ad3ea6d2d6.mp3",
+  1.65
+ ],
+ "It is small and red.": [
+  "assets/voice/b37e849b4be1.mp3",
+  1.7
  ],
  "It is small and yellow.": [
   "assets/voice/57f97089db15.mp3",
-  1.71
+  1.73
  ],
  "Left or right?": [
   "assets/voice/60f446fa0dfe.mp3",
-  1.08
+  1.16
  ],
  "Left? Tell me more, please.": [
   "assets/voice/0c162635e5ab.mp3",
-  2.11
+  2.24
  ],
  "Let’s warm up! Ten quick questions.": [
   "assets/voice/544df8e70d00.mp3",
-  2.31
+  2.45
  ],
  "My left or your left?": [
   "assets/voice/ff958d64f6eb.mp3",
-  1.49
+  1.42
  ],
  "My right or your right?": [
   "assets/voice/8827791c09d0.mp3",
-  1.58
+  1.47
  ],
  "Now the other way out. Help me again!": [
   "assets/voice/3b15249d06fd.mp3",
-  2.38
+  2.39
  ],
  "Now you know it all. Let’s go and find it!": [
   "assets/voice/b8c2de21a3a9.mp3",
-  3.09
+  3.0
  ],
  "OK! Tell me more.": [
   "assets/voice/35a9bba3e0dd.mp3",
-  1.85
+  2.0
  ],
  "OK! What now?": [
   "assets/voice/70b9ae4dd563.mp3",
-  1.63
+  1.75
  ],
  "OK! Your left is my right now.": [
   "assets/voice/ce77052cacc0.mp3",
-  2.55
+  2.61
  ],
  "OK! Your right is my left now.": [
   "assets/voice/ae68a98189d5.mp3",
-  2.65
+  2.59
  ],
  "OK, I am back at the start.": [
   "assets/voice/6bb2fa47509b.mp3",
-  2.22
+  2.17
  ],
  "Pip is lost in a big green maze!": [
   "assets/voice/be96ce573f90.mp3",
-  2.58
+  2.69
  ],
  "Pip needs four things to get out.": [
   "assets/voice/ebef2f6daff3.mp3",
-  1.95
+  1.81
  ],
  "Right? Tell me more, please.": [
   "assets/voice/b68d3c688713.mp3",
-  2.29
+  2.12
  ],
  "Sorry, I don’t understand. What do you want to know?": [
   "assets/voice/33b132ae93fc.mp3",
-  3.19
+  3.25
  ],
  "Sorry, I don’t understand. Where do I go?": [
   "assets/voice/191d302448bf.mp3",
-  2.81
+  2.98
  ],
  "Sorry, can you say that again?": [
   "assets/voice/90211a10bf31.mp3",
-  1.88
+  2.09
  ],
- "Take the path next to the windmill.": [
-  "assets/voice/feb784d07568.mp3",
-  2.02
+ "Take the path next to the bench.": [
+  "assets/voice/683954314948.mp3",
+  1.89
+ ],
+ "Take the path next to the fountain.": [
+  "assets/voice/a21112c5d974.mp3",
+  1.89
+ ],
+ "Take the path next to the well.": [
+  "assets/voice/6119444a8e0d.mp3",
+  1.85
  ],
  "There is a wall.": [
   "assets/voice/316f26a3b8a9.mp3",
-  1.1
+  1.14
  ],
  "This is Pip. Pip is a little explorer.": [
   "assets/voice/39cb941ffe7b.mp3",
-  3.03
+  3.04
+ ],
+ "Turn left at the bench.": [
+  "assets/voice/3b1ed83d4e73.mp3",
+  1.5
+ ],
+ "Turn left at the fountain.": [
+  "assets/voice/822ff7b6f281.mp3",
+  1.6
+ ],
+ "Turn left at the scarecrow.": [
+  "assets/voice/49ae59ec4470.mp3",
+  1.81
  ],
  "Turn left at the tree.": [
   "assets/voice/1c34e5bfff67.mp3",
-  1.51
+  1.61
  ],
  "Turn left at the well.": [
   "assets/voice/815fa6a0c6f5.mp3",
-  1.39
+  1.42
+ ],
+ "Turn left at the windmill.": [
+  "assets/voice/e5d050236085.mp3",
+  1.61
+ ],
+ "Turn left here.": [
+  "assets/voice/b23dc6ad7ea0.mp3",
+  1.45
+ ],
+ "Turn right at the bench.": [
+  "assets/voice/2df32049126e.mp3",
+  1.29
  ],
  "Turn right at the fountain.": [
   "assets/voice/e2adf98ab64c.mp3",
-  1.49
+  1.61
+ ],
+ "Turn right at the scarecrow.": [
+  "assets/voice/2fe1a7c876ce.mp3",
+  1.71
+ ],
+ "Turn right at the tree.": [
+  "assets/voice/075e1a8b6661.mp3",
+  1.42
+ ],
+ "Turn right at the well.": [
+  "assets/voice/101a60411b2a.mp3",
+  1.36
+ ],
+ "Turn right at the windmill.": [
+  "assets/voice/f0bdf471f10d.mp3",
+  1.56
+ ],
+ "Turn right here.": [
+  "assets/voice/749b0c2f8572.mp3",
+  1.2
+ ],
+ "Walk to the bench.": [
+  "assets/voice/2d8081ae6e09.mp3",
+  1.18
+ ],
+ "Walk to the fountain.": [
+  "assets/voice/4621866cec74.mp3",
+  1.34
+ ],
+ "Walk to the scarecrow.": [
+  "assets/voice/65897daf96f8.mp3",
+  1.39
+ ],
+ "Walk to the tree.": [
+  "assets/voice/1b0816dc6c8e.mp3",
+  1.23
+ ],
+ "Walk to the well.": [
+  "assets/voice/5be5f60fc8e1.mp3",
+  1.21
+ ],
+ "Walk to the windmill.": [
+  "assets/voice/7d40e86bd41d.mp3",
+  1.28
  ],
  "Which way? Click a path.": [
   "assets/voice/3fba30e96d2f.mp3",
-  1.93
+  1.94
  ],
  "Yes! This way.": [
   "assets/voice/8f95c3d5a966.mp3",
-  1.71
+  1.63
  ],
  "You helped me so much! Look back at what you did.": [
   "assets/voice/e940ab8b4993.mp3",
-  3.31
+  3.4
  ]
 };

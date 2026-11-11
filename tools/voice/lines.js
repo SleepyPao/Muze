@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-/* Collect every fixed line Pip says (canned text, facts, warm-up instructions, screen lines) as JSON on stdout.
+/* Collect every fixed line Pip can say in ANY game (canned text, all possible facts, all warm-up instructions,
+ * screen lines) as JSON on stdout.
  * Used by tools/voice/make_voice.py to pre-record Pip's voice offline. Lines written by the AI at run time are
  * not here (they fall back to an on-device system voice, or stay silent). */
 'use strict';
@@ -19,8 +20,11 @@ for (const [k, v] of Object.entries(T)) {
 ['left', 'right'].forEach((d) => { add(T.whose(d)); add(T.whoseNote(d)); add(T.guideOneWord(d)); });
 /* "I can't see a fountain." happens for known landmarks that are not straight ahead */
 MR.data.landmarkIds.concat(['door', 'exit']).forEach((id) => add(T.cantSee(MR.data.landmarkName(id))));
-MR.data.items.forEach((it) => MR.data.FACTS.forEach((f) => add(MR.data.factText(it.id, f))));
-MR.data.warmup.forEach((q) => { if (q.instruction) add(q.instruction); });
+/* every fact of every possible game (each game is made from a random seed): all 8 things x all looks, every place
+ * sentence any map shape / landmark arrangement can make, and the classic game's facts */
+MR.data.allFactTexts().forEach(add);
+/* every warm-up instruction any game can use */
+MR.data.allWarmupInstructions().forEach(add);
 
 /* literal lines in the screens: every quoted sentence on a line that makes Pip talk */
 const dir = path.join(__dirname, '..', '..', 'js', 'screens');

@@ -34,3 +34,4 @@
 .mr-teach__gate .mr-card { max-width: 480px; display: flex; flex-direction: column; gap: 10px; }
 .mr-screen--teacher .mr-h2 { color: var(--ink); text-shadow: none; }
 @media (max-width: 1000px) { .mr-teach__top { grid-template-columns: 1fr; } }
+.mr-teach__tip { margin: 0; background: #fff3b8; border: 2px solid var(--ink); border-radius: 6px; padding: 6px 10px; font-size: 15px; font-weight: 700; }

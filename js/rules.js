@@ -20,7 +20,8 @@
   var VERBS = ['is', 'are', 'am', 'was', 'do', 'does', 'did', 'can', 'could', 'will', 'would', 'has', 'have',
     'need', 'needs', 'want', 'wants', 'look', 'looks', 'find', 'tell', 'show', 'put', 'see', 'get', 'lost', 'lose', 'looking'];
   var OFF_TASK = /\b(your name|how old|you live|your (house|home|school|mum|dad|family|friend|teacher)|do you like|favou?rite|football|basketball|homework|weather|joke|sing|dance|play|game|games|tv|pizza|food|eat|who are you|how are you|hello|hi|hey|bye|goodbye|good (morning|afternoon)|i love you|robot|stupid|silly|poo)\b/;
-  var TASK_HINT = /\b(it|need|want|thing|looking for|key|map|lamp|bag)\b/;
+  /* words that show the sentence is about the task: every thing Pip may need in any game (the whole pool) */
+  var TASK_HINT = new RegExp('\\b(it|need|want|thing|looking for|' + MR.data.POOL.map(function (p) { return p.noun; }).join('|') + ')\\b');
 
   /**
    * Classify one pupil sentence in the Ask stage.

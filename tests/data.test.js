@@ -149,3 +149,16 @@ test('hint ladder has two levels per fact', () => {
   for (const f of data.FACTS) { assert.ok(data.hints[f][1]); assert.ok(data.hints[f][2]); }
   assert.equal(data.hints.place[1], 'Ask about the place.');
 });
+
+test('warm-up turn questions never depend on whose left is meant (Pip walks away from the viewer)', () => {
+  for (const q of data.warmup.filter((w) => w.type === 'path')) {
+    const at = q.approach[q.approach.length - 1];
+    const lastDir = MR.maze.facingBetween(q.approach.length > 1 ? q.approach[q.approach.length - 2] : q.map.start, at);
+    assert.equal(lastDir, 'N', q.id + ': Pip must arrive facing away from the viewer');
+    if (/\b(left|right)\b/i.test(q.instruction)) {
+      const want = /\bleft\b/i.test(q.instruction) ? 'W' : 'E';
+      const pick = q.options[q.correct].tiles[0];
+      assert.equal(MR.maze.facingBetween(at, pick), want, q.id + ': screen side = Pip\'s side');
+    }
+  }
+});

@@ -41,8 +41,9 @@ test('mode: direct with a key, proxy with a proxyUrl, offline when forced', () =
 test('request: DeepSeek chat shape, json mode, prompts mention json; no class number is sent', async () => {
   const MR = fresh();
   MR.state.begin('5A-12');
+  const it = MR.data.items[0];                      // this game's first thing (each game has its own things)
   const calls = online(MR, ['{"category":"look","reply":"It is huge and purple.","grammar_note":""}']);
-  const r = await MR.ai.ask({ item: 'key', given: ['name'], text: 'Can you tell me about its colour?' });
+  const r = await MR.ai.ask({ item: it.id, given: ['name'], text: 'Can you tell me about its colour?' });
   assert.equal(calls.length, 1);
   const c = calls[0];
   assert.equal(c.url, 'https://api.deepseek.com/chat/completions');
@@ -57,7 +58,8 @@ test('request: DeepSeek chat shape, json mode, prompts mention json; no class nu
   const user = JSON.parse(c.body.messages[1].content);
   assert.deepEqual(Object.keys(user).sort(), ['already_given', 'facts', 'pupil_sentence']);
   // the model's own fact text is thrown away: the canonical fact is shown
-  assert.equal(r.reply, 'It is small and yellow.');
+  assert.equal(r.reply, it.look);
+  assert.deepEqual(user.facts, { name: 'I need ' + it.name + '.', look: it.look, place: it.place });
   assert.deepEqual([r.category, r.fact_given, r.failed, r.source], ['look', 'look', false, 'ai']);
 });
 

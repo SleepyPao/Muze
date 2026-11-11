@@ -1,7 +1,8 @@
 /* Go (spec 4.3): the maze for one thing. Two junctions, 2-3 paths each; the pupil clicks a path.
  * Only the FIRST choice at each junction counts for the teacher. A wrong path ends in a dead end:
  * "Dead end. Go back and ask Pip again." - Pip walks back to the junction and the pupil may ask Pip again.
- * Random clicking can never reach the thing: only the right branch of junction 2 leads to it. */
+ * Random clicking can never reach the thing: only the right branch of junction 2 leads to it.
+ * Side panel: the fact card, the legend (MR.legend: the name of every landmark on the map; tap = it blinks) and a tip. */
 (function (root) {
   'use strict';
   var MR = root.MR, ui = MR.ui, el = ui.el;
@@ -19,11 +20,14 @@
       var box = el('div', { class: 'mr-scene-box mr-go__scene' });
       var card = MR.askKit.factCard(item, { compact: true, title: 'Pip needs ' + item.name });
       var tip = el('p', { class: 'mr-go__tip', text: 'Click a path to show Pip the way.' });
-      rootEl.appendChild(el('div', { class: 'mr-go' }, [box, el('div', { class: 'mr-go__side' }, [card.el, el('div', { class: 'mr-card mr-go__help' }, [tip])])]));
+      var side = el('div', { class: 'mr-go__side' }, [card.el, el('div', { class: 'mr-card mr-go__help' }, [tip])]);
+      rootEl.appendChild(el('div', { class: 'mr-go' }, [box, side]));
       card.focus('place');
 
       scene = MR.render.createScene(box, mz, { item: { id: item.id, x: mz.item.x, y: mz.item.y }, showExit: false, label: 'Maze for ' + item.name });
       var sc = scene;
+      /* the legend: the name of every landmark on this map (the words in the place sentence); tap = it blinks on the map */
+      side.insertBefore(MR.legend.create(mz, sc, { compact: true }), side.lastChild);
       sc.setPip(mz.start.x, mz.start.y, mz.start.facing);
       var walking = false, current = -1;
 

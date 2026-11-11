@@ -3,7 +3,7 @@
  * Base unit: 16x16 px tiles. The renderer scales the whole scene by an integer factor with smoothing off.
  *
  *   MR.sprites.pip(facing 'N'|'E'|'S'|'W', frame 0|1|2)  -> canvas 16x20  (frame 0 idle, 1/2 walk)
- *   MR.sprites.item(id)                                  -> canvas 16x16  (key, map, lamp, bag)
+ *   MR.sprites.item(id, colour?)                         -> canvas 16x16  (8 things, recoloured to the look colour)
  *   MR.sprites.landmark(type, frame, orient)            -> {canvas, ox, oy}  (draw at tileX*16+ox, tileY*16+oy)
  *   MR.sprites.portrait(emotion)                         -> canvas 32x32  (neutral, happy, confused, thinking, surprised)
  *   MR.sprites.star() / heart() / glyph(ch)              -> small canvases for effects
@@ -146,23 +146,36 @@
     });
   };
 
-  /* ------------------------------------------------------------------ items (16 x 16) */
+  /* ------------------------------------------------------------------ items (16 x 16)
+   * '1' '2' '3' = the thing's own colour (light, main, dark). It is recoloured to the colour Pip says in the look fact
+   * ("It is small and blue." -> a blue thing). Other letters are fixed palette colours. */
+  var RAMPS = S.COLOUR_RAMPS = {
+    red:    ['#ff8a7a', '#e04848', '#a82c38'],
+    blue:   ['#9fd4ff', '#3f8fe0', '#2a5ea8'],
+    green:  ['#a8e07a', '#5cbf4a', '#37862f'],
+    yellow: ['#fff3a8', '#ffd84a', '#d9a520'],
+    brown:  ['#e8c890', '#b07c3c', '#7a4a2a'],
+    pink:   ['#ffd0e4', '#ff8fbf', '#d0588e'],
+    purple: ['#d9b8ff', '#9a5ad8', '#64329a'],
+    orange: ['#ffc58a', '#ff9a3c', '#c8661e']
+  };
+  var ITEM_COLOUR = { key: 'yellow', map: 'brown', lamp: 'red', bag: 'green', book: 'blue', ball: 'orange', hat: 'purple', cup: 'pink' };
   var ITEMS = {
     key: [
       '................',
       '......kkkk......',
-      '.....kyyyyk.....',
-      '....kyYkkyyk....',
-      '....kyk..kyk....',
-      '....kyykkyyk....',
-      '.....kyyyyk.....',
-      '......kyok......',
-      '......kyok......',
-      '......kyokkk....',
-      '......kyoyyk....',
-      '......kyokkk....',
-      '......kyok......',
-      '......kyoyyk....',
+      '.....k2222k.....',
+      '....k21kk22k....',
+      '....k2k..k2k....',
+      '....k22kk22k....',
+      '.....k2222k.....',
+      '......k23k......',
+      '......k23k......',
+      '......k23kkk....',
+      '......k2322k....',
+      '......k23kkk....',
+      '......k23k......',
+      '......k2322k....',
       '......kkkkk.....',
       '................'
     ],
@@ -170,16 +183,16 @@
       '................',
       '................',
       '..kkkkkkkkkkkk..',
-      '.kTttttttttttTk.',
-      '.kTtuuttttxtttk.',
-      '.kTttutttxxtttk.',
-      '.kTtttuutxtxttk.',
-      '.kTttttttuttttk.',
-      '.kTttxtttuuttTk.',
-      '.kTtttttttutttk.',
-      '.kTttttttttxtTk.',
-      '.kTtttttttxtxtk.',
-      '.kTTTTTTTTTTTTk.',
+      '.k211111111112k.',
+      '.k21331111x111k.',
+      '.k2113111xx111k.',
+      '.k2111331x1x11k.',
+      '.k211111131111k.',
+      '.k211x11133112k.',
+      '.k211111113111k.',
+      '.k211111111x12k.',
+      '.k21111111x1x1k.',
+      '.k222222222222k.',
       '..kkkkkkkkkkkk..',
       '................',
       '................'
@@ -188,17 +201,17 @@
       '.......kk.......',
       '......k..k......',
       '......k..k......',
-      '.....kkkkkk.....',
-      '....kXXXXXXk....',
-      '...kxzzzzzzxk...',
-      '...kxzYYYYzxk...',
-      '...kxzYyyYzxk...',
-      '...kxzYyyYzxk...',
-      '...kxzYYYYzxk...',
-      '...kxzzzzzzxk...',
-      '....kXXXXXXk....',
-      '.....kxxxxk.....',
       '....kkkkkkkk....',
+      '...k33333333k...',
+      '..k1222222222k..',
+      '..k12zzzzzz23k..',
+      '..k12zYyyYz23k..',
+      '..k12zYyyYz23k..',
+      '..k12zzzzzz23k..',
+      '..k2222222223k..',
+      '...k33333333k...',
+      '....k222222k....',
+      '...kkkkkkkkkk...',
       '................',
       '................'
     ],
@@ -208,22 +221,102 @@
       '....kk....kk....',
       '....k......k....',
       '...kkkkkkkkkk...',
-      '..kvqqvvvvvvvk..',
-      '.kvqvvvvvvvvvVk.',
-      '.kvvvkkkkkkvvVk.',
-      '.kvvvkyyyykvvVk.',
-      '.kvvvkkkkkkvvVk.',
-      '.kvvvvvvvvvvvVk.',
-      '.kvvvvvvvvvvVVk.',
-      '.kVvvvvvvvvVVVk.',
-      '..kVVVVVVVVVVk..',
+      '..k2112222222k..',
+      '.k212222222223k.',
+      '.k222kkkkkk223k.',
+      '.k222kyyyyk223k.',
+      '.k222kkkkkk223k.',
+      '.k222222222223k.',
+      '.k222222222233k.',
+      '.k322222222333k.',
+      '..k3333333333k..',
       '...kkkkkkkkkk...',
+      '................'
+    ],
+    book: [
+      '................',
+      '..kkkkkkkkkkkkkk',
+      '.k3222222222222k',
+      '.k3212222222222k',
+      '.k32kkkkkkkk222k',
+      '.k32kwwwwwwk222k',
+      '.k32kkkkkkkk222k',
+      '.k3222222222222k',
+      '.k3222222222222k',
+      '.k3222222222222k',
+      '.k3222222222222k',
+      '.k3kkkkkkkkkkkkk',
+      '.k3wBwBwBwBwBwBk',
+      '.k3wwwwwwwwwwwwk',
+      '..kkkkkkkkkkkkkk',
+      '................'
+    ],
+    ball: [
+      '................',
+      '.....kkkkkk.....',
+      '...kk222222kk...',
+      '..k2ww2222222k..',
+      '..k2w12222222k..',
+      '.k221122222222k.',
+      '.k222222222223k.',
+      '.k222222222223k.',
+      '.kwwwwwwwwwwwwk.',
+      '.k222222222233k.',
+      '.k322222222333k.',
+      '..k3322222333k..',
+      '..k3333333333k..',
+      '...kk333333kk...',
+      '.....kkkkkk.....',
+      '................'
+    ],
+    hat: [
+      '................',
+      '................',
+      '................',
+      '.....kkkkkk.....',
+      '....k112222k....',
+      '...k12222222k...',
+      '...k12222222k...',
+      '...k22222223k...',
+      '...kwwwwwwwwk...',
+      '...k33333333k...',
+      '.kkk22222222kkk.',
+      'k12222222222223k',
+      'k33333333333333k',
+      '.kkkkkkkkkkkkkk.',
+      '................',
+      '................'
+    ],
+    cup: [
+      '................',
+      '................',
+      '..kkkkkkkkkk....',
+      '..k3AAAAAA3k....',
+      '..k12222223kkk..',
+      '..k12222223k.3k.',
+      '..k12w2w223k.3k.',
+      '..k12www223k.3k.',
+      '..k122w2223kk3k.',
+      '..k12222223kkk..',
+      '..k12222223k....',
+      '..k12222223k....',
+      '...k122223k.....',
+      '....kkkkkk......',
+      '................',
       '................'
     ]
   };
   S.itemIds = Object.keys(ITEMS);
-  S.item = function (id) {
-    return cached('item' + id, function () { return fromRows(ITEMS[id] || ITEMS.key); });
+  /** Item icon. colour: a key of COLOUR_RAMPS; default = the colour of this thing in the game now (MR.data.itemColour). */
+  S.item = function (id, colour) {
+    if (!colour) colour = (MR.data && MR.data.itemColour && MR.data.itemColour(id)) || ITEM_COLOUR[id];
+    var ramp = RAMPS[colour] || RAMPS[ITEM_COLOUR[id]] || RAMPS.yellow;
+    return cached('item' + id + '|' + colour, function () {
+      var pal = {}, k;
+      for (k in PAL) pal[k] = PAL[k];
+      pal['1'] = ramp[0]; pal['2'] = ramp[1]; pal['3'] = ramp[2];
+      return fromRows(ITEMS[id] || ITEMS.key, false, pal);
+    });
   };
 
   /* ------------------------------------------------------------------ small effect sprites */

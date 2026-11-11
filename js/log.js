@@ -114,7 +114,7 @@
     });
   };
   /** Any other record, e.g. log.event('warmup','summary',{correct:8,total:10}), log.event('go','pickup',{item_id}),
-   *  log.event('review','self_review',{answers:{...}}). */
+   *  log.event('review','self_review',{answers:{...}}), log.event('start','session',{seed, difficulty, items}) (MR.state.begin). */
   log.event = function (stage, event, extra) {
     var e = { stage: stage, event: event };
     for (var k in (extra || {})) e[k] = extra[k];
@@ -146,6 +146,13 @@
       for (var k in filter) if (e[k] !== filter[k]) return false;
       return true;
     }).map(MR.util.clone);
+  };
+  /** The game content a pupil played (the newest 'session' record): {seed, difficulty, items:[{id, colour, name, look, place}]},
+   *  or null (e.g. a log from before games were random). */
+  log.sessionOf = function (classNo) {
+    var list = log.forStudent(classNo, { stage: 'start', event: 'session' });
+    var e = list[list.length - 1];
+    return e ? { seed: e.seed, difficulty: e.difficulty || null, items: e.items || [], timestamp: e.timestamp } : null;
   };
   log.classNos = function () {
     var seen = {}, out = [];

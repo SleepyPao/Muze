@@ -25,7 +25,8 @@ test('state: flow Start -> Warm-up -> Ask/Go x4 -> break -> Guide x2 -> Review',
     assert.equal(S.collectItem(it.id), false, 'only once');
     assert.equal(S.get().stars, i + 1);
   });
-  assert.deepEqual(S.get().inventory, ['key', 'map', 'lamp', 'bag']);
+  assert.deepEqual(S.get().inventory, MR.data.items.map((it) => it.id));
+  assert.equal(new Set(S.get().inventory).size, 4);
   assert.equal(S.nextScreen().screen, 'sessionbreak');
   assert.equal(S.lesson(), 2);
   S.markBreakSeen();
@@ -40,19 +41,20 @@ test('state: flow Start -> Warm-up -> Ask/Go x4 -> break -> Guide x2 -> Review',
 test('state: hints, assisted flag, first-choice recording', () => {
   const MR = fresh(), S = MR.state;
   S.begin('6B-3');
-  assert.equal(S.nextHintFact('key'), 'name');
-  S.useHint('key', 'name', 1);
-  assert.equal(S.unlockFact('key', 'name').assisted, false, 'level 1 is not "assisted"');
-  assert.equal(S.nextHintFact('key'), 'look');
-  S.useHint('key', 'look', 1); S.useHint('key', 'look', 2);
-  const u = S.unlockFact('key', 'look');
+  const id = MR.data.items[0].id;
+  assert.equal(S.nextHintFact(id), 'name');
+  S.useHint(id, 'name', 1);
+  assert.equal(S.unlockFact(id, 'name').assisted, false, 'level 1 is not "assisted"');
+  assert.equal(S.nextHintFact(id), 'look');
+  S.useHint(id, 'look', 1); S.useHint(id, 'look', 2);
+  const u = S.unlockFact(id, 'look');
   assert.equal(u.assisted, true); assert.equal(u.hint_level, 2); assert.equal(u.isNew, true);
-  assert.equal(S.unlockFact('key', 'look').isNew, false);
-  let j = S.recordJunction('key', 0, 1, false);
+  assert.equal(S.unlockFact(id, 'look').isNew, false);
+  let j = S.recordJunction(id, 0, 1, false);
   assert.deepEqual(j, { first: true, first_choice_correct: false, attempts: 1 });
-  j = S.recordJunction('key', 0, 0, true);
+  j = S.recordJunction(id, 0, 0, true);
   assert.deepEqual(j, { first: false, first_choice_correct: false, attempts: 2 }, 'the first choice stays wrong');
-  assert.equal(S.itemState('key').junctions[0].done, true);
+  assert.equal(S.itemState(id).junctions[0].done, true);
 });
 
 test('state: persists per class number; lesson 2 resumes at Guide; reset', () => {
@@ -82,43 +84,45 @@ test('class number validation', () => {
 
 /* ------------------------------------------------------------------ log */
 function playOne(MR, classNo) {
-  const S = MR.state, L = MR.log, key = MR.data.getItem('key');
+  const S = MR.state, L = MR.log;
   S.begin(classNo);
+  const key = MR.data.items[0], id = key.id;          // this game's first thing
   L.event('warmup', 'summary', { correct: 7, total: 10 });
   const turn = (text, mode, asr) => {
     const result = Object.assign(MR.rules.answerAsk(key, text), { failed: false, source: 'rules' });
     let assisted = false, hint_level = 0;
-    if (result.fact_given) { const u = S.unlockFact('key', result.fact_given); assisted = u.assisted; hint_level = u.hint_level; }
-    return L.askTurn({ item_id: 'key', input_mode: mode || 'text', asr_text: asr || '', sent_text: text, result, assisted, hint_level });
+    if (result.fact_given) { const u = S.unlockFact(id, result.fact_given); assisted = u.assisted; hint_level = u.hint_level; }
+    return L.askTurn({ item_id: id, input_mode: mode || 'text', asr_text: asr || '', sent_text: text, result, assisted, hint_level });
   };
   turn('Where');                                             // clarification
   turn('Where it is?', 'speech', 'where it is');             // rewrite ok, grammar note, corrected ASR
   turn('What do you need?');
-  S.useHint('key', 'look', 1); L.hint({ stage: 'ask', item_id: 'key', hint_level: 1, hint_fact: 'look' });
-  S.useHint('key', 'look', 2); L.hint({ stage: 'ask', item_id: 'key', hint_level: 2, hint_fact: 'look' });
+  S.useHint(id, 'look', 1); L.hint({ stage: 'ask', item_id: id, hint_level: 1, hint_fact: 'look' });
+  S.useHint(id, 'look', 2); L.hint({ stage: 'ask', item_id: id, hint_level: 2, hint_fact: 'look' });
   turn('What does it look like?');                           // assisted
   turn('Where is it?');                                      // repeat: still 3 facts
-  L.lockStage('ask', 'key');
-  let j = S.recordJunction('key', 0, 1, false); L.goChoice({ item_id: 'key', junction_index: 0, choice: 1, correct: false, first: j.first, first_choice_correct: j.first_choice_correct });
-  j = S.recordJunction('key', 0, 0, true); L.goChoice({ item_id: 'key', junction_index: 0, choice: 0, correct: true, first: j.first, first_choice_correct: j.first_choice_correct });
-  j = S.recordJunction('key', 1, 0, true); L.goChoice({ item_id: 'key', junction_index: 1, choice: 0, correct: true, first: j.first, first_choice_correct: j.first_choice_correct });
+  L.lockStage('ask', id);
+  let j = S.recordJunction(id, 0, 1, false); L.goChoice({ item_id: id, junction_index: 0, choice: 1, correct: false, first: j.first, first_choice_correct: j.first_choice_correct });
+  j = S.recordJunction(id, 0, 0, true); L.goChoice({ item_id: id, junction_index: 0, choice: 0, correct: true, first: j.first, first_choice_correct: j.first_choice_correct });
+  j = S.recordJunction(id, 1, 0, true); L.goChoice({ item_id: id, junction_index: 1, choice: 0, correct: true, first: j.first, first_choice_correct: j.first_choice_correct });
   L.guideTurn({ route_id: 'r1', sent_text: 'turn', parsed_actions: [], clarify_triggered: true, ai_reply: 'Left or right?' });
   L.guideTurn({ route_id: 'r1', sent_text: 'turn left', parsed_actions: [{ type: 'turn', dir: 'left' }], hit_wall: false });
   L.guideTurn({ route_id: 'r1', sent_text: 'go straight', parsed_actions: [{ type: 'forward' }], hit_wall: true, ai_reply: 'There is a wall.' });
   L.guideTurn({ route_id: 'r1', sent_text: 'go to the exit', parsed_actions: [{ type: 'forward', until: 'exit' }], reached_exit: true });
+  return key;
 }
 
 test('log: record shape follows spec 5.3 (no player field), turn numbers, no audio', () => {
   const MR = fresh();
-  playOne(MR, '5A-12');
+  const it = playOne(MR, '5A-12');
   const e = MR.log.forStudent('5A-12', { stage: 'ask', event: 'turn' })[1];
   for (const f of ['class_no', 'stage', 'item_id', 'turn', 'input_mode', 'asr_text', 'sent_text', 'category', 'ai_reply', 'fact_given', 'hint_level', 'clarification', 'timestamp']) {
     assert.ok(f in e, 'field ' + f);
   }
   assert.ok(!('player' in e));
   assert.deepEqual([e.class_no, e.stage, e.item_id, e.turn, e.input_mode, e.asr_text, e.sent_text, e.category, e.fact_given, e.clarification],
-    ['5A-12', 'ask', 'key', 2, 'speech', 'where it is', 'Where it is?', 'place', 'place', false]);
-  assert.equal(e.ai_reply, 'It is behind the red door, next to the blue fountain.');
+    ['5A-12', 'ask', it.id, 2, 'speech', 'where it is', 'Where it is?', 'place', 'place', false]);
+  assert.equal(e.ai_reply, it.place);
   assert.match(e.grammar_note, /word order/);
   assert.equal(e.rewrite_success, true);
   assert.ok(!isNaN(Date.parse(e.timestamp)));
@@ -135,16 +139,16 @@ test('log: record shape follows spec 5.3 (no player field), turn numbers, no aud
 
 test('log: a locked stage is read-only; other stages and pupils are not affected', () => {
   const MR = fresh();
-  playOne(MR, '5A-12');
+  const it = playOne(MR, '5A-12'), other = MR.data.items[1];
   const before = MR.log.all().length;
-  const res = MR.log.askTurn({ item_id: 'key', sent_text: 'Where is it?', result: MR.rules.answerAsk(MR.data.getItem('key'), 'Where is it?') });
+  const res = MR.log.askTurn({ item_id: it.id, sent_text: 'Where is it?', result: MR.rules.answerAsk(it, 'Where is it?') });
   assert.equal(res, null);
   assert.equal(MR.log.all().length, before);
-  assert.equal(MR.log.isLocked('ask', 'key'), true);
-  assert.equal(MR.log.isLocked('ask', 'map'), false);
-  assert.ok(MR.log.askTurn({ item_id: 'map', sent_text: 'Where is it?', result: MR.rules.answerAsk(MR.data.getItem('map'), 'Where is it?') }));
+  assert.equal(MR.log.isLocked('ask', it.id), true);
+  assert.equal(MR.log.isLocked('ask', other.id), false);
+  assert.ok(MR.log.askTurn({ item_id: other.id, sent_text: 'Where is it?', result: MR.rules.answerAsk(other, 'Where is it?') }));
   MR.state.begin('5A-13');
-  assert.equal(MR.log.isLocked('ask', 'key'), false);
+  assert.equal(MR.log.isLocked('ask', it.id), false);
   // returned records are copies: changing them does not change the log
   const copy = MR.log.all(); copy[0].class_no = 'HACK';
   assert.notEqual(MR.log.all()[0].class_no, 'HACK');
@@ -194,7 +198,7 @@ test('log: rubric A and C (0-3), CSV export', () => {
 
 test('log: export, then import / merge on another device (idempotent)', () => {
   let MR = fresh();
-  playOne(MR, '5A-12');
+  const it = playOne(MR, '5A-12');
   MR.log.setRubric('5A-12', { A_question_form: 3 });
   const exported = MR.log.exportJSON();
   const n = MR.log.all().length;
@@ -209,7 +213,7 @@ test('log: export, then import / merge on another device (idempotent)', () => {
   assert.deepEqual(res, { ok: true, added: 0, skipped: n });
   assert.deepEqual(MR.log.classNos(), ['5A-12', '6B-01']);
   assert.equal(MR.log.getRubric('5A-12').A_question_form, 3);
-  assert.equal(MR.log.isLocked('ask', 'key', '5A-12'), true, 'locks travel with the export');
+  assert.equal(MR.log.isLocked('ask', it.id, '5A-12'), true, 'locks travel with the export');
   assert.equal(MR.log.aggregate().length, 2);
   assert.equal(MR.log.importJSON('not json').ok, false);
   assert.equal(MR.log.importJSON('{"app":"other"}').ok, false);

@@ -38,8 +38,8 @@ async function main() {
   await page.waitForTimeout(400);
   await page.screenshot({ path: out });
   await browser.close();
-  errors.filter((e) => !/config\.local\.js/.test(e)).forEach((e) => console.log(e));
+  errors.filter((e) => !/config\.local\.js|ERR_FILE_NOT_FOUND/.test(e)).forEach((e) => console.log(e));
   console.log('saved', out);
-  process.exit(errors.filter((e) => !/config\.local\.js/.test(e)).length ? 1 : 0);
+  process.exit(errors.filter((e) => !/config\.local\.js|ERR_FILE_NOT_FOUND/.test(e)).length ? 1 : 0);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

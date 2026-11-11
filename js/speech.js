@@ -6,7 +6,6 @@
   'use strict';
   var MR = root.MR = root.MR || {};
   var speech = MR.speech = {};
-  var active = null;      /* current recognition session */
   var voice = null;
   var speakOn = true;
 
@@ -17,44 +16,128 @@
   speech.canListen = function () { return !!Rec() && cfg().speechInput !== false; };
   /** Can this browser speak? */
   speech.canSpeak = function () { return (!!root.MR_VOICE || !!(root.speechSynthesis && root.SpeechSynthesisUtterance)) && cfg().speechOutput !== false; };
-  speech.isListening = function () { return !!active; };
 
-  /**
-   * Start listening for ONE utterance.
-   * @param {{onResult?:function(text:string, isFinal:boolean), onEnd?:function(finalText:string), onError?:function(code:string)}} h
-   * @returns {{stop:function()}|null}  null when recognition is not available
-   */
-  speech.listen = function (h) {
-    h = h || {};
-    var R = Rec();
-    if (!R || cfg().speechInput === false) { if (h.onError) h.onError('unsupported'); return null; }
-    speech.stopListening();
-    speech.cancelSpeak();
-    var rec, finalText = '', ended = false;
-    try { rec = new R(); } catch (e) { if (h.onError) h.onError('unsupported'); return null; }
-    rec.lang = cfg().speechLang || 'en-US';
-    rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
-    rec.onresult = function (ev) {
+  /* ---------------------------------------------------------------- listening
+   * ONE recogniser object per page, reused for every Speak press (a new object per press is not needed, and some
+   * browsers ask for the microphone again for a new object). Each press is a "session" with its own callbacks;
+   * events that arrive for an old session (after Stop / abort) are ignored, so a late result can never land in the
+   * box after the pupil pressed Send or left the screen. If the recogniser is still finishing the last session, the
+   * new one starts as soon as it has ended (or with a fresh object after 0.8 s). If a stop does not end within
+   * 1.5 s, the session is closed anyway and the next press uses a fresh object. */
+  var rec = null;        /* the recogniser */
+  var running = false;   /* rec.start() was called and onend has not come yet */
+  var session = null;    /* the session the recogniser is working for */
+  var queued = null;     /* a session waiting for the recogniser to end */
+  var seq = 0;
+  speech.isListening = function () { return !!(session && !session.ended) || !!queued; };
+
+  function newRec() {
+    var R = Rec(), r = new R();
+    r.onresult = function (ev) {
+      var s = session;
+      if (r !== rec || !s || s.closed || s.ended) return;
       var text = '', isFinal = false;
       for (var i = 0; i < ev.results.length; i++) { text += ev.results[i][0].transcript; if (ev.results[i].isFinal) isFinal = true; }
       text = text.replace(/\s+/g, ' ').trim();
-      if (isFinal) finalText = text;
-      if (h.onResult) h.onResult(text, isFinal);
+      if (isFinal) s.finalText = text;
+      if (s.h.onResult) s.h.onResult(text, isFinal);
     };
-    rec.onerror = function (ev) { if (h.onError) h.onError((ev && ev.error) || 'error'); };
-    rec.onend = function () {
-      if (ended) return; ended = true;
-      if (active && active.rec === rec) active = null;
-      MR.emit('speech:listening', false);
-      if (h.onEnd) h.onEnd(finalText);
+    r.onerror = function (ev) {
+      var s = session;
+      if (r !== rec || !s || s.closed || s.ended) return;
+      if (s.h.onError) s.h.onError((ev && ev.error) || 'error');
     };
-    try { rec.start(); } catch (e) { if (h.onError) h.onError('start-failed'); return null; }
-    active = { rec: rec };
+    r.onend = function () {
+      if (r !== rec) return;
+      running = false;
+      var s = session; session = null;
+      if (s) finish(s);
+      if (queued) { var q = queued; queued = null; clearTimeout(q.waitTimer); begin(q); }
+    };
+    return r;
+  }
+  function finish(s) {
+    if (s.ended) return;
+    s.ended = true;
+    clearTimeout(s.stopTimer); clearTimeout(s.waitTimer);
+    if (session === s) session = null;
+    MR.emit('speech:listening', false);
+    if (!s.closed && s.h.onEnd) s.h.onEnd(s.finalText);
+  }
+  function setup(r) {
+    r.lang = cfg().speechLang || 'en-US';
+    /* continuous: keep listening through short pauses (children think while they talk); the Speak button's 10 s
+     * countdown (MR.ui) or Stop ends it, and so does a quiet moment after a finished phrase */
+    r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
+  }
+  function begin(s) {
+    if (s.closed || s.ended) return;
+    try {
+      if (!rec) rec = newRec();
+      setup(rec);
+      try { rec.start(); }
+      catch (e) { rec = newRec(); setup(rec); rec.start(); }   /* still busy: use a fresh one once */
+    } catch (e2) {
+      rec = null; running = false; s.ended = true;
+      if (s.h.onError) s.h.onError('start-failed');
+      return;
+    }
+    running = true; session = s;
     MR.emit('speech:listening', true);
-    return { stop: function () { try { rec.stop(); } catch (e) { /* ignore */ } } };
+  }
+  function dropRec() {
+    if (rec) { try { rec.abort(); } catch (e) { /* ignore */ } }
+    rec = null; running = false;
+  }
+
+  /**
+   * Start listening for ONE utterance (the recogniser stops by itself after a pause).
+   * @param {{onResult?:function(text:string, isFinal:boolean), onEnd?:function(finalText:string), onError?:function(code:string)}} h
+   *   onEnd is called once when the session ends (also after stop()); not after abort().
+   * @returns {{stop:function(), abort:function()}|null}  null when recognition is not available / could not start
+   *   stop(): finish now and keep what was heard (onEnd gets the final text); abort(): cancel, no more callbacks.
+   */
+  speech.listen = function (h) {
+    h = h || {};
+    if (!Rec() || cfg().speechInput === false) { if (h.onError) h.onError('unsupported'); return null; }
+    speech.cancelSpeak();
+    var s = { id: ++seq, h: h, finalText: '', ended: false, closed: false, stopTimer: 0, waitTimer: 0 };
+    if (queued) { queued.closed = true; finish(queued); queued = null; }
+    if (running) {
+      if (session) { session.closed = true; finish(session); }
+      try { rec.abort(); } catch (e) { /* ignore */ }
+      queued = s;
+      s.waitTimer = setTimeout(function () { if (queued === s) { queued = null; dropRec(); begin(s); } }, 800);
+    } else {
+      begin(s);
+      if (s.ended) return null;
+    }
+    return {
+      stop: function () {
+        if (s.ended) return;
+        if (queued === s) { queued = null; finish(s); return; }
+        if (session === s && running) {
+          try { rec.stop(); } catch (e) { /* ignore */ }
+          s.stopTimer = setTimeout(function () { if (!s.ended) { if (session === s) { session = null; dropRec(); } finish(s); } }, 1500);
+        } else finish(s);
+      },
+      abort: function () {
+        if (s.ended) return;
+        s.closed = true;
+        if (queued === s) queued = null;
+        if (session === s && running) { try { rec.abort(); } catch (e) { /* ignore */ } }
+        finish(s);
+      }
+    };
   };
+  /** Stop the current session but keep what was heard. */
   speech.stopListening = function () {
-    if (active) { try { active.rec.stop(); } catch (e) { /* ignore */ } }
+    if (session && running) { try { rec.stop(); } catch (e) { /* ignore */ } }
+  };
+  /** Cancel listening (screen change, Send): no more results or callbacks for the current session. */
+  speech.abortListening = function () {
+    if (queued) { queued.closed = true; finish(queued); queued = null; }
+    if (session) { session.closed = true; var s = session; if (running) { try { rec.abort(); } catch (e) { /* ignore */ } } finish(s); }
   };
 
   /* ---------------------------------------------------------------- Pip's voice

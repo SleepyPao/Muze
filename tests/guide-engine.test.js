@@ -21,11 +21,11 @@ test('validateActions / validateOutput reject anything outside the three action 
 
 test('route 1 (standard) can be solved with landmark instructions; trail and exit are tracked', () => {
   const mz = data.guideMaze('r1', 'standard'), run = guide.newRun(mz);
-  let r = say(mz, run, 'Go straight until the fountain');
+  let r = say(mz, run, 'Go straight until the big tree');
   assert.equal(r.status, 'ok');
   assert.deepEqual({ x: run.x, y: run.y }, { x: 1, y: 5 });
   assert.equal(r.steps[0].type, 'move'); assert.equal(r.steps[0].path.length, 4);
-  r = say(mz, run, 'Turn right, then walk to the tree and turn left');
+  r = say(mz, run, 'Turn right, then walk to the fountain and turn left');
   assert.equal(r.status, 'ok'); assert.equal(run.facing, 'N'); assert.deepEqual({ x: run.x, y: run.y }, { x: 7, y: 5 });
   r = say(mz, run, 'go straight until the windmill. turn right.');
   assert.deepEqual({ x: run.x, y: run.y, f: run.facing }, { x: 7, y: 1, f: 'E' });
@@ -64,11 +64,11 @@ test('acceptance: hitting a wall does not end the game; Pip stays and the pupil 
 
 test('until a landmark Pip cannot see -> clarify, Pip does not move', () => {
   const mz = data.guideMaze('r1', 'standard'), run = guide.newRun(mz);
-  const r = say(mz, run, 'go straight until the tree');
+  const r = say(mz, run, 'go straight until the fountain');
   assert.equal(r.status, 'clarify'); assert.equal(r.clarify.kind, 'landmark');
-  assert.equal(r.say, 'I can’t see a tree. What can I see?');
+  assert.equal(r.say, 'I can’t see a fountain. What can I see?');
   assert.deepEqual({ x: run.x, y: run.y }, { x: 1, y: 9 });
-  assert.deepEqual(guide.visibleNames(mz, run), ['fountain']);
+  assert.deepEqual(guide.visibleNames(mz, run), ['tree']);
   const r2 = say(mz, run, 'go to the bench');
   assert.equal(r2.say, 'I can’t see a bench. What can I see?');
 });
@@ -96,7 +96,7 @@ test('left / right rule: asked once per route when Pip faces the viewer', () => 
   // facing S again later in the same route: no second question
   r = say(mz, run, 'turn left');
   assert.equal(run.facing, 'S');
-  r = say(mz, run, 'go straight until the tree, turn right');
+  r = say(mz, run, 'go straight until the fountain, turn right');
   assert.equal(r.status, 'ok'); assert.equal(run.facing, 'W');
   r = say(mz, run, 'go to the exit');
   assert.equal(r.status, 'exit');
@@ -113,7 +113,7 @@ test('left / right rule: "my left" (the pupil\'s side) is mirrored when Pip face
   // an explicit "your left" never triggers the question
   const run2 = guide.newRun(mz);
   r = say(mz, run2, 'turn your left');
-  assert.equal(r.status, 'ok'); assert.equal(run2.facing, 'E'); assert.equal(run2.whoseAsked, true);
+  assert.equal(r.status, 'ok'); assert.equal(run2.facing, 'E'); assert.equal(run2.whoseMode, 'your');
 });
 
 test('no question when Pip faces away from the viewer', () => {
@@ -124,13 +124,34 @@ test('no question when Pip faces away from the viewer', () => {
 
 test('all four mazes are solvable through the engine with a scripted solution', () => {
   const scripts = {
-    r1: ['go straight until the fountain', 'turn right', 'go straight until the tree', 'turn left', 'go straight until the windmill', 'turn right', 'go to the exit'],
-    r2: ['go straight until the bench', 'turn your right', 'go straight until the scarecrow', 'turn left', 'go straight until the tree', 'turn right', 'go to the exit']
+    r1: ['go straight until the tree', 'turn right', 'go straight until the fountain', 'turn left', 'go straight until the windmill', 'turn right', 'go to the exit'],
+    r2: ['go straight until the bench', 'turn your right', 'go straight until the tree', 'turn left', 'go straight until the fountain', 'turn right', 'go to the exit']
   };
   for (const r of data.routeIds) for (const d of data.DIFFICULTIES) {
     const mz = data.guideMaze(r, d), run = guide.newRun(mz);
     let last;
     for (const line of scripts[r]) { last = say(mz, run, line); assert.notEqual(last.status, 'wall', `${mz.id}: ${line}`); assert.notEqual(last.status, 'clarify', `${mz.id}: ${line}`); }
     assert.equal(last.status, 'exit', mz.id);
+  }
+});
+
+test('left / right rule: Pip remembers the answer for the rest of the route and never switches meaning', () => {
+  const mz = data.guideMaze('r2', 'standard');
+  for (const [answer, expectFacing] of [['my left', 'W'], ['your left', 'E']]) {
+    const run = guide.newRun(mz);
+    let r = say(mz, run, 'go straight');                          // Pip still faces the viewer
+    r = say(mz, run, 'turn left');
+    assert.equal(r.status, 'clarify');
+    const ans = rules.parseGuide(answer, { expect: 'whose', pendingDir: 'left' });
+    r = guide.execute(mz, run, guide.mergeAnswer(r.pending, ans.actions));
+    assert.equal(run.facing, expectFacing, answer);
+    assert.equal(run.whoseMode, answer.startsWith('my') ? 'my' : 'your');
+    // turn back to face the viewer, then an unqualified turn: no second question, same meaning as before
+    r = guide.execute(mz, run, [{ type: 'turn', dir: expectFacing === 'W' ? 'left' : 'right', whose: 'your' }]);
+    assert.equal(run.facing, 'S');
+    r = say(mz, run, 'turn left');
+    assert.equal(r.status, 'ok', 'asked only once per route');
+    assert.equal(run.facing, expectFacing, 'same meaning of "left" as the pupil chose');
+    assert.equal(r.note, null, 'the teaching note is said only the first time');
   }
 });
