@@ -1,4 +1,4 @@
-/* Maze Rescue - map legend: "What Pip can see". Browser only. Requires ui.js, render.js, guide-hint.js (names).
+/* Maze Rescue - map legend: "What Pip can see". Browser only. Requires data.js (names), ui.js, render.js.
  *
  *   var card = MR.legend.create(map, scene, opts)   -> HTMLElement (a .mr-card), put it anywhere (Guide side panel, Go ...)
  *     opts: { title:'What Pip can see', compact:false, onPick:function(type) }
@@ -14,10 +14,8 @@
   var MR = root.MR;
   var legend = MR.legend = {};
 
-  legend.name = function (type) {
-    if (MR.guide && MR.guide.label) return MR.guide.label(type);
-    return type === 'exit' ? 'way out' : MR.data.landmarkName(type);
-  };
+  /** The one name of a landmark (js/data.js): the same words Pip and the hints use. */
+  legend.name = function (type) { return MR.data.landmarkName(type); };
   /** Landmark types on the map, in a fixed order (closed vocabulary order), the gate last. */
   legend.types = function (map, o) {
     o = o || {};

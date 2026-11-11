@@ -144,6 +144,41 @@ test('Guide: "your left" / "my left" answers', () => {
   assert.deepEqual(acts('left', { expect: 'whose', pendingDir: 'left' }), [{ type: 'turn', dir: 'left', whose: 'your' }]);
   assert.deepEqual(acts('turn to your left'), [{ type: 'turn', dir: 'left', whose: 'your' }]);
   assert.deepEqual(acts('turn my right'), [{ type: 'turn', dir: 'right', whose: 'my' }]);
+  /* Pip is a girl's voice: "her left", "their left", "Pip's left" all mean Pip's own side */
+  for (const w of ['her', 'their', 'his', 'pip’s', "Pip's", 'pips', 'pip']) {
+    assert.deepEqual(acts(w + ' left', { expect: 'whose', pendingDir: 'left' }), [{ type: 'turn', dir: 'left', whose: 'your' }], w);
+    assert.deepEqual(acts('turn ' + w + ' right'), [{ type: 'turn', dir: 'right', whose: 'your' }], w);
+  }
+  assert.deepEqual(acts('hers', { expect: 'whose', pendingDir: 'right' }), [{ type: 'turn', dir: 'right', whose: 'your' }]);
+  assert.deepEqual(acts('her right'), [{ type: 'turn', dir: 'right', whose: 'your' }], 'also without a question before');
+  assert.equal(rules.parseGuide('her').clarifyKind, 'unknown', 'a bare "her" is only an answer');
+});
+
+test('Guide: "turn around" / "go back" is ONE action, never two left turns', () => {
+  for (const t of ['turn around', 'Turn around.', 'turn round', 'turn back', 'go back', 'Go back, please', 'turn right around', 'Pip, turn around now']) {
+    assert.deepEqual(acts(t), [{ type: 'turn', dir: 'around' }], t);
+  }
+  assert.deepEqual(acts('turn around and go straight'), [{ type: 'turn', dir: 'around' }, { type: 'forward' }]);
+  assert.deepEqual(acts('turn around', { expect: 'whose', pendingDir: 'left' }), [{ type: 'turn', dir: 'around' }], 'not an answer to "My left or your left?"');
+  assert.deepEqual(acts('go back to the well'), [], 'not understood rather than guessed');
+});
+
+test('Guide: one name per landmark - the legend name and the bare noun are both understood', () => {
+  for (const id of data.landmarkIds.concat(['exit'])) {
+    const name = data.landmarkName(id);
+    assert.deepEqual(acts('go straight until the ' + name), [{ type: 'forward', until: id }], name);
+    assert.equal(data.landmarkFromWords(name), id);
+  }
+  assert.equal(data.landmarkName('tree'), 'big tree'); assert.equal(data.landmarkName('fountain'), 'blue fountain'); assert.equal(data.landmarkName('exit'), 'way out');
+  for (const [words, id] of [['tree', 'tree'], ['the big tree', 'tree'], ['a tree', 'tree'], ['fountain', 'fountain'], ['the blue fountain', 'fountain'],
+    ['exit', 'exit'], ['the way out', 'exit'], ['gate', 'exit']]) {
+    assert.deepEqual(acts('walk to ' + words), [{ type: 'forward', until: id }], words);
+  }
+  /* Pip's own sentences use the same names */
+  for (const id of data.landmarkIds) assert.equal(data.landmarkTypes[id].phrase, 'the ' + data.landmarkName(id));
+  assert.ok(data.allFactTexts().some((t) => t.includes('the big tree')) && data.allFactTexts().some((t) => t.includes('the blue fountain')));
+  assert.ok(data.allWarmupInstructions().includes('Turn left at the big tree.') && data.allWarmupInstructions().includes('Walk to the blue fountain.'));
+  assert.equal(data.text.cantSee(data.landmarkName('tree')), 'I can’t see a big tree. What can I see?');
 });
 
 test('Guide: nonsense is not understood', () => {

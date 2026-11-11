@@ -7,6 +7,8 @@
  * from the running page (MR.data) and plays whatever this game is.
  * 1. Pupil 5A-12 (standard maze) plays everything: Start -> Warm-up (10) -> 4 things (Ask + Go, legend on the Go map)
  *    -> end of lesson 1 -> reload + same class number = same game back -> Guide route 1 + 2 (scripted) -> Review.
+ *    In route 2 the page is reloaded twice in the middle: Pip asks his open question again, stands where he was,
+ *    still remembers "my left", and the teacher's replay is the walk the pupil saw. "Turn around" is one half turn.
  * 2. Pupil 5A-13 (simple maze) plays everything on the same device: a different game (other seed, other content);
  *    in Guide this pupil types ONLY the level-2 hints ("Try: ...") and must reach both exits without a wall.
  * 3. Teacher view: two separate rows with the right counts, rubric entry, CSV + JSON export.
@@ -15,6 +17,9 @@
  * 5. Broken AI: empty content, then invalid JSON -> "Sorry, can you say that again?", game keeps working,
  *    after two failures the offline rules take over.
  * 6. No arrow-key handling in the code; no console errors; every fixed line Pip said has a pre-recorded clip.
+ * 7. Pictures: the yellow chevron points the way Pip looks (N / E / S / W) and is drawn over landmarks; the picture
+ *    sizes used by the "Pip is never hidden" rule match the real sprites; at normal speed the input stays off until
+ *    Pip has said his note, so no sentence is lost; the example evidence (teacher demo) reaches both exits.
  * Checks follow the acceptance list in PLAN.md section 10. */
 'use strict';
 const path = require('path');
@@ -57,6 +62,25 @@ async function recordSaid(page) {
     window.__said = window.__said || new Set();
     const say = MR.ui.dialog.say;
     MR.ui.dialog.say = function (t, o) { if (!o || o.speak !== false) window.__said.add(String(t).trim()); return say.apply(this, arguments); };
+  });
+}
+/** Reload the page (a new lesson, or the browser was closed) and type the same class number again. */
+async function reloadAndLogin(page, classNo) {
+  SAID_BEFORE_RELOAD.push(...await page.evaluate(() => Array.from(window.__said || [])));
+  await page.reload();
+  await recordSaid(page);
+  await page.fill('#mr-classno-input', classNo);
+  await page.click('#mr-start-btn');
+}
+/** What the pupil sees in Guide (the scene) next to what the game remembers and what the teacher's replay shows. */
+async function guideView(page) {
+  return page.evaluate(() => {
+    const s = MR.state.get(), rid = MR.data.routeIds[s.guide.routeIndex];
+    const st = MR.render.active[MR.render.active.length - 1].debugState();
+    const rep = MR.guide.replay(MR.log.forStudent(s.class_no))[rid] || null;
+    return { rid, pip: { x: st.pip.x, y: st.pip.y, facing: st.pip.facing }, trailShown: st.trail,
+      saved: s.guide.routes[rid].trail, rep: rep && { x: rep.run.x, y: rep.run.y, facing: rep.run.facing, whoseMode: rep.run.whoseMode, trail: rep.trail, pending: !!rep.pending },
+      history: Array.from(document.querySelectorAll('.mr-guide__item')).map((li) => li.textContent) };
   });
 }
 /** This game's content, read from the page: seed, the four things' facts, warm-up, Guide maze variants. */
@@ -181,11 +205,7 @@ async function playGame(page, classNo, difficulty, opts) {
 
   if (opts.resume) {
     /* next lesson: the page is reloaded, the pupil types the same class number -> exactly the same game */
-    SAID_BEFORE_RELOAD.push(...await page.evaluate(() => Array.from(window.__said)));
-    await page.reload();
-    await recordSaid(page);
-    await page.fill('#mr-classno-input', classNo);
-    await page.click('#mr-start-btn');
+    await reloadAndLogin(page, classNo);
     await page.waitForSelector('.mr-break');
     const again = await content(page);
     ok(JSON.stringify(again) === JSON.stringify(game), `same class number after a reload: same seed, same things, facts, warm-up and mazes (${again.guide.join(', ')})`);
@@ -209,8 +229,70 @@ async function playGame(page, classNo, difficulty, opts) {
       s = await send(page, 'I can\'t see a castle, go to the castle');
       s = await send(page, 'walk to the house');
       ok(/I can.t see a house\. What can I see\?/.test(s), 'Guide: unknown landmark -> "I can\'t see a house. What can I see?"');
+      /* one name per landmark: what the legend shows is what Pip says and what the pupil may type */
+      const names = await page.evaluate(() => {
+        const s = MR.state.get(), mz = MR.data.guideMaze('r1', s.difficulty);
+        const ahead = MR.maze.visibleAhead(mz, mz.start, mz.start.facing).map((v) => v.type);
+        const hidden = mz.landmarks.map((l) => l.type).filter((t) => ahead.indexOf(t) < 0 && MR.data.landmarkTypes[t].solid)[0];
+        return { legend: Array.from(document.querySelectorAll('.mr-legend__name')).map((e) => e.textContent), all: MR.legend.types(mz).map((t) => MR.data.landmarkName(t)),
+          hidden: MR.data.landmarkName(hidden), bare: MR.data.landmarkTypes[hidden].words[0] };
+      });
+      ok(JSON.stringify(names.legend) === JSON.stringify(names.all) && names.legend.includes('way out'), `the legend shows the one name of each landmark (${names.legend.join(', ')})`);
+      s = await send(page, 'walk to the ' + names.hidden);
+      const an = /^[aeiou]/.test(names.hidden) ? 'an' : 'a';
+      ok(s === `I can’t see ${an} ${names.hidden}. What can I see?`, `Pip uses the legend name too: "${s}"`);
+      s = await send(page, 'walk to the ' + names.bare);
+      ok(s === `I can’t see ${an} ${names.hidden}. What can I see?`, `the bare noun ("${names.bare}") means the same landmark`);
       await page.click('#mr-guide-restart');
       ok(await page.evaluate(() => { const st = MR.render.active[MR.render.active.length - 1].debugState(); return st.trail === 0; }), 'Start again resets Pip, no penalty');
+    }
+    if (r === 1 && opts.resume) {
+      /* ---------- route 2: Pip faces the pupil. Reload in the middle, twice. */
+      let s = await send(page, 'turn around');
+      let v = await guideView(page);
+      ok(!/left|right/i.test(s) && v.pip.facing === 'N', `"turn around" while Pip faces the pupil: one half turn, no "My left or your left?" (Pip said "${s}")`);
+      s = await send(page, 'go back');
+      v = await guideView(page);
+      ok(v.pip.facing === 'S' && v.rep.whoseMode === null, '"go back" turns Pip around again; nothing about left / right was remembered');
+      s = await send(page, 'go straight');
+      s = await send(page, 'turn left');
+      ok(s === 'My left or your left?', 'first plain "turn left" while Pip faces the pupil -> "My left or your left?"');
+      const before1 = await guideView(page);
+      await reloadAndLogin(page, classNo);
+      await page.waitForSelector('.mr-guide');
+      v = await guideView(page);
+      ok(JSON.stringify(v.pip) === JSON.stringify(before1.pip) && v.pip.y > 1, `after a reload Pip stands where he was (${v.pip.x},${v.pip.y} facing ${v.pip.facing}), not back at the start`);
+      ok((await speech(page)) === 'My left or your left?' && v.rep.pending, 'after the reload Pip asks his open question again');
+      ok(JSON.stringify(v.history) === JSON.stringify(before1.history) && v.history.length === 4, '"What I said" is back after the reload: ' + v.history.join(' | '));
+      s = await send(page, 'her left');
+      v = await guideView(page);
+      const herFacing = v.pip.facing;
+      ok(herFacing === 'E' && v.rep.whoseMode === 'your', '"her left" = Pip\'s own left (screen right when she faces the pupil)');
+      await page.click('#mr-guide-restart');
+      s = await send(page, 'go straight');
+      s = await send(page, 'turn left');
+      s = await send(page, 'my left');
+      v = await guideView(page);
+      ok(v.pip.facing === 'W' && v.rep.whoseMode === 'my', '"my left" = the pupil\'s left (screen left); Pip remembers it');
+      s = await send(page, 'turn around');
+      v = await guideView(page);
+      ok(v.pip.facing === 'E' && v.rep.whoseMode === 'my', '"turn around" with "my left" remembered: Pip really looks the other way');
+      const before2 = await guideView(page);
+      await reloadAndLogin(page, classNo);
+      await page.waitForSelector('.mr-guide');
+      v = await guideView(page);
+      ok(JSON.stringify(v.pip) === JSON.stringify(before2.pip) && v.rep.whoseMode === 'my', 'second reload: same place, same facing, the answer "my left" is still remembered');
+      ok(JSON.stringify(v.rep.trail) === JSON.stringify(v.saved) && v.rep.x === v.pip.x && v.rep.y === v.pip.y && v.rep.facing === v.pip.facing && v.trailShown === v.saved.length - 1,
+        'the teacher\'s replay, the saved trail and the picture on screen are the same walk');
+      s = await send(page, 'turn your right');                       /* explicit, Pip's side: E -> S (faces the pupil again) */
+      s = await send(page, 'turn your left');                        /* explicit and different from "my": done as said ... */
+      v = await guideView(page);
+      ok(v.pip.facing === 'E' && v.rep.whoseMode === 'my', '... an explicit "your left" is done as said but does not change what Pip remembers');
+      s = await send(page, 'turn your right');
+      s = await send(page, 'turn left');
+      v = await guideView(page);
+      ok(!/My left or your left/.test(s) && v.pip.facing === 'W', 'a plain "turn left" still means the pupil\'s left, and Pip does not ask again');
+      await page.click('#mr-guide-restart');
     }
     const plan = await page.evaluate(() => {
       const s = MR.state.get(), rid = MR.data.routeIds[s.guide.routeIndex], mz = MR.data.guideMaze(rid, s.difficulty);
@@ -309,6 +391,11 @@ async function playGame(page, classNo, difficulty, opts) {
   await page.waitForSelector('.mr-teach__log');
   ok(await page.$$eval('.mr-teach__details canvas', (e) => e.length) === 2, 'teacher can open a pupil: full record + 2 route replays');
   ok(/word order: Where is it\?/.test(await page.textContent('.mr-teach__notes')), 'grammar note for "Where it is?" visible to the teacher only');
+  const logText = await page.textContent('.mr-teach__log');
+  ok(/turn around/.test(logText) && /turn left \(pupil’s side\)/.test(logText) && /turn left \(Pip’s side\)/.test(logText) && !/turn left, turn left/.test(logText),
+    'teacher record: "turn around" is one action; "my left" / "her left" are shown as the pupil\'s side / Pip\'s side');
+  const walk = await page.evaluate(() => { const rep = MR.guide.replay(MR.log.forStudent('5A-12')); return { r1: rep.r1.reached, r2: rep.r2.reached, n2: rep.r2.instructions, run2: rep.r2.run.instructions }; });
+  ok(walk.r1 && walk.r2 && walk.n2 > walk.run2, `teacher replay of 5A-12 ends at both exits; all ${walk.n2} lines of route 2 are counted, the last run had ${walk.run2}`);
   let [dl] = await Promise.all([page.waitForEvent('download'), page.click('#mr-export-csv')]);
   const csv = fs.readFileSync(await dl.path(), 'utf8');
   ok(/^﻿?class_no,/.test(csv) && /\n5A-12,12,1,7,2,/.test(csv) && /,2,3,1\r\n/.test(csv), 'class CSV export has the counts and rubric scores');
@@ -388,6 +475,86 @@ async function playGame(page, classNo, difficulty, opts) {
   ok(!(await pm.isVisible('#mr-mictimer')) && (await pm.textContent('#mr-mic')).trim() === 'Speak', 'pressing Stop ends listening at once');
   ok(errorsM.length === 0, 'no page errors with the microphone');
   await pm.close();
+
+  /* ---------- pictures: facing chevron, sprite sizes, example evidence */
+  console.log('\n== pictures');
+  const pp = await context.newPage();
+  const errorsP = [];
+  pp.on('pageerror', (e) => errorsP.push(e.message));
+  await pp.goto(URL + '?fast=1&debug=guide&route=1&seed=7');
+  await pp.waitForSelector('.mr-guide');
+  await pp.waitForTimeout(300);
+  for (const f of ['N', 'E', 'S', 'W']) {
+    const a = await pp.evaluate(async (f) => {
+      const sc = MR.render.active[MR.render.active.length - 1], mz = sc.map;
+      /* stand just above a landmark when facing S, so the chevron lies on the landmark's tile */
+      const lm = mz.landmarks.find((l) => MR.maze.isWalkable(mz, l.x, l.y - 1) && MR.data.landmarkTypes[l.type].solid);
+      sc.setPip(lm.x, lm.y - 1, f);
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const st = sc.debugState().arrow, d = MR.maze.DIRS[f];
+      const px = sc.canvas.getContext('2d').getImageData(st.tip[0], st.tip[1], 1, 1).data;
+      const along = (p) => (p[0] - st.pipCentre[0]) * d.dx + (p[1] - st.pipCentre[1]) * d.dy;
+      return { tip: along(st.tip), centre: along(st.centre), colour: [px[0], px[1], px[2]].join(','), lm: lm.type };
+    }, f);
+    ok(a.tip > a.centre && a.centre > 6 && a.colour === '255,216,74',
+      `facing ${f}: the chevron is on the side Pip looks at and its tip points away from Pip (tip ${a.tip} px, middle ${a.centre} px ahead), drawn on top${f === 'S' ? ' of the ' + a.lm : ''}`);
+  }
+  const boxes = await pp.evaluate(() => {
+    const bad = [];
+    function opaque(cv, ox, oy) {
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (let y = 0; y < cv.height; y++) for (let x = 0; x < cv.width; x++) if (d[(y * cv.width + x) * 4 + 3] > 40) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+      return [x0 + ox, y0 + oy, x1 + ox, y1 + oy];
+    }
+    const cover = (inner, outer) => inner[0] >= outer[0] && inner[1] >= outer[1] && inner[2] <= outer[2] && inner[3] <= outer[3];
+    for (const t of MR.data.landmarkIds.concat(['exit'])) {
+      for (let frame = 0; frame < 4; frame++) for (const orient of ['ns', 'ew']) {
+        const s = MR.sprites.landmark(t, frame, orient), real = opaque(s.canvas, s.ox, s.oy);
+        if (!cover(real, MR.data.SPRITE_BOX[t])) bad.push(t + ' ' + real.join(',') + ' is outside ' + MR.data.SPRITE_BOX[t].join(','));
+      }
+    }
+    for (const f of ['N', 'E', 'S', 'W']) for (let frame = 0; frame < 3; frame++) {
+      const real = opaque(MR.sprites.pip(f, frame), 0, -6);
+      if (!cover(real, MR.data.PIP_BOX)) bad.push('pip ' + f + frame + ' ' + real.join(','));
+    }
+    return bad;
+  });
+  ok(boxes.length === 0, 'the picture sizes in data.js (the "Pip is never hidden" rule) cover the real sprites' + (boxes.length ? ': ' + boxes.join(' | ') : ''));
+  await pp.goto(URL + '?fast=1&debug=teacher');
+  await pp.waitForSelector('.mr-teach__table');
+  const demo = await pp.evaluate(() => MR.log.classNos().map((c) => {
+    const e = MR.log.forStudent(c), rep = MR.guide.replay(e);
+    return { c, r1: rep.r1.reached, r2: rep.r2.reached, around: e.some((x) => (x.parsed_actions || []).some((a) => a.dir === 'around')),
+      twoLefts: e.some((x) => /around/.test(x.sent_text) && (x.parsed_actions || []).length !== 1), engine: e.filter((x) => x.stage === 'guide' && x.event === 'turn').every((x) => x.engine === MR.guide.ENGINE) };
+  }));
+  ok(demo.length === 3 && demo.every((d) => d.r1 && d.r2 && d.engine) && demo.some((d) => d.around) && !demo.some((d) => d.twoLefts),
+    'example evidence (teacher demo): all three pupils reach both exits under the current rules; "turn around" is one action');
+  ok(errorsP.length === 0, 'no page errors in the picture checks');
+
+  /* ---------- normal speed: the input stays off until Pip has said his note, so no sentence is lost */
+  await pp.goto(URL + '?debug=guide&route=1&seed=7');
+  await pp.waitForSelector('.mr-guide');
+  const sendSlow = async (text) => {
+    await pp.waitForFunction(() => !document.getElementById('mr-input').disabled, null, { timeout: 15000 });
+    await pp.fill('#mr-input', text);
+    await pp.click('#mr-send');
+  };
+  await sendSlow('turn left');
+  await waitSpeech(pp, /^My left or your left\?$/, 15000);
+  await sendSlow('my left');
+  await pp.waitForFunction(() => /^OK! Y/.test(document.getElementById('mr-speech').textContent), null, { timeout: 15000 });
+  const during = await pp.evaluate(() => ({ off: document.getElementById('mr-input').disabled && document.getElementById('mr-send').disabled, text: document.getElementById('mr-speech').textContent }));
+  ok(during.off && during.text.length < 'OK! Your left is my right now.'.length, `while Pip is still saying his note ("${during.text}…") the input and Send are off`);
+  await pp.evaluate(() => MR.ui.dialog.submit('go straight'));       /* a sentence pushed in anyway is not thrown away */
+  ok(await pp.evaluate(() => MR.log.all().filter((e) => e.stage === 'guide' && e.event === 'turn').length) === 2, 'nothing can be sent during the note');
+  await sendSlow('turn around');                                   /* sent the moment the input comes back */
+  await pp.waitForFunction(() => document.querySelectorAll('.mr-guide__item').length === 3, null, { timeout: 15000 });
+  await pp.waitForFunction(() => !document.getElementById('mr-input').disabled, null, { timeout: 15000 });
+  const after = await pp.evaluate(() => ({ turns: MR.log.all().filter((e) => e.stage === 'guide' && e.event === 'turn').map((e) => e.sent_text),
+    facing: MR.render.active[MR.render.active.length - 1].debugState().pip.facing }));
+  ok(JSON.stringify(after.turns) === JSON.stringify(['turn left', 'my left', 'turn around']) && after.facing === 'E',
+    'the sentence sent right after the note is run and logged (nothing dropped): ' + after.turns.join(' / '));
+  await pp.close();
 
   /* ---------- broken AI */
   console.log('\n== broken AI');

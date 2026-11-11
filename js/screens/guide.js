@@ -4,7 +4,10 @@
  * "I can't see a tree. What can I see?"). A wall stops Pip ("There is a wall.") - never game over.
  * Side panel: the task + "Start again", the legend (MR.legend: the name of every landmark; tap = it blinks on the map),
  * the hint box and "What I said". Hints come from where Pip is NOW (js/guide-hint.js): 1st click = what Pip can see,
- * 2nd click = the next good instruction. The level goes back to 1 after Pip moves. */
+ * 2nd click = the next good instruction. The level goes back to 1 after Pip moves.
+ * After a page reload (or the next lesson) the walk is rebuilt from the log with MR.guide.replay - the same function
+ * the teacher's replay uses - so Pip stands where he was, looks the same way, still remembers what "left" means
+ * (run.whoseMode) and, if he was waiting for "My left or your left?", asks it again. */
 (function (root) {
   'use strict';
   var MR = root.MR, ui = MR.ui, el = ui.el;
@@ -59,14 +62,29 @@
           ui.dialog.focus();
         }
       }
-      restartRun(false);
-
       function addHistory(text, kind) {
         empty.hidden = true;
         var mark = { ok: '✓', wall: '!', ask: '?', exit: '★', fail: '…' }[kind] || '•';
         list.appendChild(el('li', { class: 'mr-guide__item is-' + kind }, [el('span', { class: 'mr-guide__mark', text: mark }), el('span', { text: text })]));
         list.scrollTop = list.scrollHeight;
       }
+      /** Go on where the pupil stopped: the run is rebuilt from this pupil's log records (what the teacher's replay shows).
+       *  @returns {boolean} false when there is nothing to go on from (a new route, or right after "Start again") */
+      function resumeRun() {
+        var rep = MR.guide.replay(MR.log.forStudent(MR.state.classNo(), { stage: 'guide', route_id: rid }))[rid];
+        if (!rep || rep.mazeId !== mz.id || !rep.said.length) return false;
+        run = rep.run;
+        pending = rep.pending;
+        ctx = pending ? { expect: 'whose', pendingDir: rep.pendingDir } : {};
+        sc.setPip(run.x, run.y, run.facing);
+        sc.clearTrail();
+        sc.addTrail(run.trail.slice(0, -1).map(function (t, i) { return { x: t.x, y: t.y, facing: MR.maze.facingBetween(t, run.trail[i + 1]) || 'N' }; }));
+        rep.said.forEach(function (h) { addHistory(h.text, h.kind); });
+        if (!run.finished) MR.state.saveRouteProgress(rid, run);
+        return true;
+      }
+      restartRun(false);
+      var resumed = resumeRun();
 
       function animate(steps) {
         var p = Promise.resolve();
@@ -74,6 +92,9 @@
           p = p.then(function () {
             if (!live()) return;
             if (st.type === 'move') return sc.walk(st.path, { msPerTile: 170 });
+            if (st.type === 'turn' && st.dir === 'around') {            /* a half turn: show it in two quarter turns */
+              return sc.turn(MR.maze.RIGHT_OF[MR.maze.OPPOSITE[st.facing]]).then(function () { return live() ? sc.turn(st.facing) : null; });
+            }
             if (st.type === 'turn') return sc.turn(st.facing);
             if (st.type === 'bump') return sc.bump();
           });
@@ -82,7 +103,16 @@
       }
 
       ui.dialog.show({ input: true, hint: true, emotion: 'neutral', placeholder: 'Tell Pip where to go…' });
-      ui.dialog.say(ri === 0 ? T.guideOpen : 'Now the other way out. Help me again!', { emotion: 'neutral' });
+      if (resumed && run.finished) {
+        /* the page was closed while Pip walked his last steps: he is out, show it */
+        busy = true;
+        finish();
+      } else if (resumed && pending) {
+        sc.emote('?', 1600);
+        ui.dialog.say(T.whose(ctx.pendingDir), { emotion: 'confused' });       /* Pip was waiting for this answer */
+      } else {
+        ui.dialog.say(ri === 0 ? T.guideOpen : 'Now the other way out. Help me again!', { emotion: 'neutral' });
+      }
       ui.dialog.focus();
 
       /* Hints are worked out from where Pip is now, so they are always true. Click 1: what Pip can see.
@@ -105,7 +135,7 @@
       });
 
       ui.dialog.onSend(function (payload) {
-        if (busy || run.finished) return;
+        if (busy || run.finished) { ui.dialog.setValue(payload.text); return; }   /* never lose a sentence: it stays in the box */
         busy = true;
         if (!hintBox.hidden) { hintBox.hidden = true; sc.resize(); }
         ui.dialog.setBusy(true);
@@ -146,11 +176,13 @@
             ui.dialog.say('…', { speak: false, instant: true, emotion: 'neutral' });
             return animate(res.steps).then(function () {
               if (!live()) return;
-              ui.dialog.setBusy(false);
               MR.state.saveRouteProgress(rid, run);
+              /* the input stays off until Pip has said his note ("OK! Your left is my right now."): a sentence sent
+               * in between would be thrown away */
               var after = res.note ? ui.dialog.say(res.note, { emotion: 'happy' }).then(function () { return MR.util.wait(MR.flags.fast ? 0 : 300); }) : Promise.resolve();
               return after.then(function () {
                 if (!live()) return;
+                ui.dialog.setBusy(false);
                 ctx = {};
                 if (res.status === 'wall') { ui.dialog.say(T.wall, { emotion: 'surprised' }); }
                 else if (res.status === 'clarify') {

@@ -18,18 +18,9 @@
   var maze = MR.maze;
   var guide = MR.guide = MR.guide || {};
 
-  /** The names a pupil sees in the legend and in hints. Every one is understood by MR.data.landmarkFromWords.
-   *  (Kept here for now; it could move to data.js.) */
-  guide.LABELS = {
-    fountain: 'fountain', tree: 'big tree', bridge: 'bridge', red_door: 'red door', green_door: 'green door',
-    windmill: 'windmill', scarecrow: 'scarecrow', well: 'well', bench: 'bench', exit: 'way out'
-  };
-  /** Legend / hint name for a landmark type ('tree' -> 'big tree', 'exit' -> 'way out'). */
-  guide.label = function (type) {
-    if (guide.LABELS[type]) return guide.LABELS[type];
-    if (MR.data && MR.data.landmarkName) return MR.data.landmarkName(type);
-    return String(type || '').replace(/_/g, ' ');
-  };
+  /** Legend / hint name for a landmark type ('tree' -> 'big tree', 'exit' -> 'way out'). There is ONE list of names,
+   *  in js/data.js (MR.data.landmarkName): Pip, the legend and the hints all use it, and the parser understands it. */
+  guide.label = function (type) { return MR.data.landmarkName(type); };
 
   var OTHER = { left: 'right', right: 'left' };
   var LOOK = { N: 'Pip is looking up.', S: 'Pip is looking down, at you.', E: 'Pip is looking to the right.', W: 'Pip is looking to the left.' };
@@ -213,9 +204,9 @@
 
     /* a turn (in Pip's own terms: m.dir) */
     var n2 = p[1];
-    if (run.facing !== 'S' && n2 && n2.type === 'turn' && n2.dir === m.dir) {
-      var around = [{ type: 'turn', dir: 'left' }, { type: 'turn', dir: 'left' }];
-      if (lands(simulate(mz, run, around, 'your'), run.x, run.y, n2.facing)) {
+    if (n2 && n2.type === 'turn' && n2.dir === m.dir) {            /* two turns the same way = "Turn around." (no left / right needed) */
+      var around = [{ type: 'turn', dir: 'around' }];
+      if (lands(simulate(mz, run, around, null), run.x, run.y, n2.facing)) {
         out.kind = 'around'; out.say = 'Turn around.'; out.actions = around;
         out.to = { x: run.x, y: run.y, facing: n2.facing }; out.left = p.length - 1;
         return done(out);

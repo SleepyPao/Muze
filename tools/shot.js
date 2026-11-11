@@ -27,6 +27,9 @@ async function main() {
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+  /* config.local.js is optional (git-ignored): its "file not found" is not an error. Any OTHER missing file is. */
+  const missing = [];
+  page.on('requestfailed', (r) => { if (!/^https?:/.test(r.url()) && !/\/config\.local\.js(\?|$)/.test(r.url())) missing.push('missing file: ' + r.url()); });
   await page.goto(url);
   await page.waitForTimeout(500);
   for (const [k, v] of steps) {
@@ -38,8 +41,9 @@ async function main() {
   await page.waitForTimeout(400);
   await page.screenshot({ path: out });
   await browser.close();
-  errors.filter((e) => !/config\.local\.js|ERR_FILE_NOT_FOUND/.test(e)).forEach((e) => console.log(e));
+  const real = errors.filter((e) => !/config\.local\.js|ERR_FILE_NOT_FOUND/.test(e)).concat(missing);
+  real.forEach((e) => console.log(e));
   console.log('saved', out);
-  process.exit(errors.filter((e) => !/config\.local\.js|ERR_FILE_NOT_FOUND/.test(e)).length ? 1 : 0);
+  process.exit(real.length ? 1 : 0);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

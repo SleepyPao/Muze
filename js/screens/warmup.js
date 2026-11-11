@@ -67,7 +67,13 @@
           if (sc !== scene) return;
           var at = q.approach[q.approach.length - 1];
           sc.setHighlights(q.options.map(function (o) { return { id: o.id, tiles: o.tiles, color: '#ffd84a' }; }));
-          sc.setMarkers(q.options.map(function (o) { return { x: o.tiles[0].x, y: o.tiles[0].y, dir: MR.maze.facingBetween(at, o.tiles[0]) || 'N' }; }));
+          /* "click here" arrows. Pip's hat and the facing chevron reach into the tile above him, so the arrow of a
+           * path that goes straight up sits on the path's second tile, clear of Pip. */
+          sc.setMarkers(q.options.map(function (o) {
+            var dir = MR.maze.facingBetween(at, o.tiles[0]) || 'N';
+            var t = dir === 'N' && o.tiles[1] ? o.tiles[1] : o.tiles[0];
+            return { x: t.x, y: t.y, dir: dir };
+          }));
           sc.onTileClick(function (x, y) {
             if (answered) return;
             var pick = -1;

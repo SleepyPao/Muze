@@ -348,6 +348,91 @@ test(`fuzz ${SEEDS.length} seeds: no tall / wide landmark stands just below a pa
   data.useSession(null);
 });
 
+/* The same promise by geometry: how much of Pip's picture is behind a landmark picture drawn in front of him
+ * (data.pipHidden uses the picture sizes in data.SPRITE_BOX; the e2e test compares that table with the real sprites). */
+function checkPipVisible(m, tag, o) {
+  for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
+    if (!maze.isWalkable(m, x, y)) continue;
+    const h = data.pipHidden(m, x, y, o);
+    assert.ok(h <= data.MAX_HIDDEN, `${tag}: on tile ${x},${y} ${Math.round(h * 100)} % of Pip is behind a landmark`);
+  }
+}
+test(`fuzz ${SEEDS.length} seeds: Pip is never hidden behind a landmark on ANY walkable tile (Guide variants, Go maps, warm-up)`, () => {
+  fresh();
+  /* the rule can tell: a tall landmark right below a path tile hides Pip, a low one does not */
+  const probe = (type, dx, dy) => data.pipHidden({ landmarks: [{ type, x: 3 + dx, y: 3 + dy }] }, 3, 3);
+  for (const t of ['tree', 'windmill', 'scarecrow']) assert.ok(probe(t, 0, 1) > data.MAX_HIDDEN, `a ${t} just below Pip hides him`);
+  for (const t of data.LOW_TYPES) assert.ok(probe(t, 0, 1) <= data.MAX_HIDDEN, `a ${t} just below Pip is fine`);
+  for (const t of data.SOLID_TYPES) { assert.equal(probe(t, 0, -1), 0, 'a landmark behind Pip hides nothing'); assert.equal(probe(t, 1, 0), 0, 'nor one beside him'); }
+  assert.ok(probe('windmill', 1, 1) > probe('scarecrow', 1, 1), 'the windmill is wide, the scarecrow is not');
+  for (const id of data.landmarkIds.concat(['exit'])) assert.equal(data.SPRITE_BOX[id].length, 4, id);
+
+  for (const r of data.routeIds) for (const d of data.DIFFICULTIES) checkPipVisible(data.guideMazes[r][d], 'hand-made ' + r + '_' + d);
+  let variants = 0;
+  for (const seed of SEEDS) {
+    data.useSession(seed);
+    for (const r of data.routeIds) for (const d of data.DIFFICULTIES) { const mz = data.guideMaze(r, d); checkPipVisible(mz, `seed ${seed} ${mz.id}`); variants++; }
+    for (const it of data.items) checkPipVisible(data.goMap(it.id), `seed ${seed} go ${it.id}`);
+    for (const q of data.warmupSet()) {
+      checkPipVisible(q.map, `seed ${seed} warm-up ${q.kind}`, { showExit: false });
+      if (q.type === 'prep') assert.ok(data.pipHidden(q.map, q.pip.x, q.pip.y) <= data.MAX_HIDDEN, `seed ${seed} ${q.kind}: Pip is in full view in the picture`);
+    }
+  }
+  /* many more seeds for the Guide mazes alone */
+  let all = 0;
+  for (const r of data.routeIds) for (const d of data.DIFFICULTIES) {
+    for (let seed = 1000; seed < 1400; seed++) { data.useSession(seed); const mz = data.guideMaze(r, d); checkPipVisible(mz, mz.id); all++; }
+  }
+  data.useSession(null);
+  assert.ok(variants === SEEDS.length * 4 && all === 1600);
+});
+
+test(`fuzz ${SEEDS.length} seeds: the four things of one game never have colours a child could mix up; no two landmarks of one map look alike`, () => {
+  fresh();
+  assert.ok(data.coloursClash('yellow', 'orange') && data.coloursClash('orange', 'yellow') && data.coloursClash('red', 'pink'));
+  assert.ok(!data.coloursClash('blue', 'green') && !data.coloursClash('yellow', 'yellow'));
+  const used = new Set();
+  for (const seed of SEEDS) {
+    data.useSession(seed);
+    const cols = data.items.map((it) => it.colour);
+    assert.equal(new Set(cols).size, 4, `seed ${seed}: four different colours`);
+    for (const a of cols) for (const b of cols) assert.ok(!data.coloursClash(a, b), `seed ${seed}: ${a} and ${b} in one game (${data.items.map((it) => it.colour + ' ' + it.id).join(', ')})`);
+    cols.forEach((c) => used.add(c));
+    assert.equal(new Set(data.items.map((it) => it.look)).size, 4, `seed ${seed}: four different look sentences`);
+    assert.equal(new Set(data.items.map((it) => it.id)).size, 4);
+    for (const it of data.items) {
+      const types = data.goMap(it.id).landmarks.map((l) => l.type);
+      assert.equal(new Set(types).size, types.length, `seed ${seed} go ${it.id}: each landmark once`);
+    }
+  }
+  data.useSession(null);
+  assert.equal(used.size, data.COLOURS.length, 'every colour is still used in some game');
+});
+
+test('warm-up pictures: the "straight" path is two tiles long; "behind" / "in front of" do not depend on whose view is used', () => {
+  for (const kind of data.WARMUP_KINDS.pathFamilies.cross.concat(['walk_to'])) {
+    for (let s = 0; s < 20; s++) {
+      const q = data.warmupQuestion(kind, s), at = q.approach[q.approach.length - 1];
+      for (const o of q.options) {
+        assert.equal(o.tiles.length, 2, `${kind}: every arm has two tiles (${o.id})`);
+        assert.equal(dist(o.tiles[0], at), 1); assert.equal(dist(o.tiles[1], at), 2);
+      }
+      const straight = q.options.find((o) => o.id === 'straight');
+      assert.deepEqual(straight.tiles[1], { x: at.x, y: at.y - 2 }, `${kind}: the far tile of the straight arm is clear of Pip's hat`);
+    }
+  }
+  for (const kind of data.WARMUP_KINDS.prep.behind.concat(data.WARMUP_KINDS.prep['in front of'])) {
+    for (let s = 0; s < 20; s++) {
+      const q = data.warmupQuestion(kind, s), lm = q.map.landmarks[0], word = q.options[q.correct];
+      assert.equal(q.pip.facing, 'N', `${kind}: Pip looks away from the viewer`);
+      /* behind = Pip is further up the screen AND the landmark is at his back; in front of = Pip is nearer the viewer
+       * AND he looks at the landmark. Both ways of reading the picture give the same word. */
+      assert.equal(word, lm.y > q.pip.y ? 'behind' : 'in front of', kind);
+      assert.equal(lm.x, q.pip.x); assert.equal(Math.abs(lm.y - q.pip.y), 1);
+    }
+  }
+});
+
 test('teacher replay rebuilds a variant route from the log alone (maze_id)', () => {
   const M = fresh();
   M.state.begin('5B-02', 'simple', { seed: 4242 });

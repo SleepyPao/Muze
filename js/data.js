@@ -11,19 +11,25 @@
 
   /* ------------------------------------------------------------------ landmarks */
   /** Closed landmark vocabulary. solid:false = Pip walks through it (it sits ON a path tile);
-   *  solid:true = it stands on a lawn tile beside the path. `name` is the phrase used in sentences. */
+   *  solid:true = it stands on a lawn tile beside the path.
+   *  `name` is the ONE name of the landmark: Pip's sentences (facts, warm-up, "I can't see a ..."), the map legend
+   *  and the hints all use it (data.landmarkName). `words` are the bare nouns a pupil may say instead: "the tree",
+   *  "the big tree", "fountain" and "blue fountain" all mean the same landmark (data.landmarkFromWords). */
   data.landmarkTypes = {
-    fountain:   { name: 'fountain',   phrase: 'the blue fountain', solid: true,  words: ['fountain'] },
-    tree:       { name: 'tree',       phrase: 'the big tree',      solid: true,  words: ['tree'] },
-    bridge:     { name: 'bridge',     phrase: 'the bridge',        solid: false, words: ['bridge'] },
-    red_door:   { name: 'red door',   phrase: 'the red door',      solid: false, words: ['red door'] },
-    green_door: { name: 'green door', phrase: 'the green door',    solid: false, words: ['green door'] },
-    windmill:   { name: 'windmill',   phrase: 'the windmill',      solid: true,  words: ['windmill', 'mill'] },
-    scarecrow:  { name: 'scarecrow',  phrase: 'the scarecrow',     solid: true,  words: ['scarecrow'] },
-    well:       { name: 'well',       phrase: 'the well',          solid: true,  words: ['well'] },
-    bench:      { name: 'bench',      phrase: 'the bench',         solid: true,  words: ['bench', 'seat'] }
+    fountain:   { name: 'blue fountain', solid: true,  words: ['fountain'] },
+    tree:       { name: 'big tree',      solid: true,  words: ['tree'] },
+    bridge:     { name: 'bridge',        solid: false, words: ['bridge'] },
+    red_door:   { name: 'red door',      solid: false, words: ['red door'] },
+    green_door: { name: 'green door',    solid: false, words: ['green door'] },
+    windmill:   { name: 'windmill',      solid: true,  words: ['windmill', 'mill'] },
+    scarecrow:  { name: 'scarecrow',     solid: true,  words: ['scarecrow'] },
+    well:       { name: 'well',          solid: true,  words: ['well'] },
+    bench:      { name: 'bench',         solid: true,  words: ['bench', 'seat'] }
   };
   data.landmarkIds = Object.keys(data.landmarkTypes);
+  data.landmarkIds.forEach(function (id) { data.landmarkTypes[id].phrase = 'the ' + data.landmarkTypes[id].name; });
+  /** The gate at the end of a Guide maze is called "the way out" everywhere (legend, hints, Pip). */
+  data.EXIT_NAME = 'way out';
 
   /** Map a pupil / model phrase to a landmark type id.
    *  Returns one of data.landmarkIds, 'door' (any door), 'exit', or null when it is not in the closed vocabulary. */
@@ -41,10 +47,13 @@
     }
     return null;
   };
-  /** Display name for a landmark type id ('red_door' -> 'red door', 'door' -> 'door', 'exit' -> 'exit'). */
+  /** THE name of a landmark type id, the same in Pip's lines, the legend and the hints:
+   *  'tree' -> 'big tree', 'fountain' -> 'blue fountain', 'red_door' -> 'red door', 'door' -> 'door', 'exit' -> 'way out'. */
   data.landmarkName = function (type) {
     var t = data.landmarkTypes[type];
-    return t ? t.name : String(type || '').replace(/_/g, ' ');
+    if (t) return t.name;
+    if (type === 'exit') return data.EXIT_NAME;
+    return String(type || '').replace(/_/g, ' ');
   };
 
   data.SOLID_TYPES = ['fountain', 'tree', 'windmill', 'scarecrow', 'well', 'bench'];
@@ -92,6 +101,41 @@
     for (var i = 0; i < spots.length; i++) if (!allows(spots[i].need, solids[i])) return false;
     return true;
   }
+  /* The same promise, checked by geometry (unit test over many seeds; the e2e test compares this table with the
+   * real pictures of js/sprites.js): the solid part of each landmark picture, in pixels relative to the top left
+   * corner of its own tile (a tile is 16 px): [left, top, right, bottom], over all animation frames and both door
+   * directions. Pip's picture on his tile is PIP_BOX. */
+  data.TILE_PX = 16;
+  data.PIP_BOX = [0, -6, 15, 13];
+  data.SPRITE_BOX = {
+    fountain: [-2, -7, 17, 14], tree: [-6, -16, 22, 15], bridge: [0, -4, 15, 15], red_door: [-2, -14, 17, 17],
+    green_door: [-2, -14, 17, 17], windmill: [-7, -25, 23, 14], scarecrow: [-3, -14, 18, 15], well: [-1, -10, 17, 14],
+    bench: [0, 3, 15, 14], exit: [-1, -14, 16, 15]
+  };
+  /** At most this part of Pip's picture may be behind a landmark. The low ones (fountain, well, bench) hide his
+   *  feet at most (the well: 8 of his 20 rows = 0.4); a scarecrow just below him would hide 0.6, a tree or windmill more. */
+  data.MAX_HIDDEN = 0.4;
+  /**
+   * How much of Pip (0..1) is hidden when he stands on tile (x, y) of a map: the largest part of his picture that
+   * is behind ONE landmark picture drawn in front of him. Rows are drawn top to bottom, so only a landmark on a
+   * LOWER row is in front of Pip (the bridge is part of the ground and hides nothing).
+   * @param {object} map  @param {number} x  @param {number} y  @param {{showExit?:boolean}} [o]
+   */
+  data.pipHidden = function (map, x, y, o) {
+    var T = data.TILE_PX, P = data.PIP_BOX, worst = 0;
+    var list = (map.landmarks || []).slice();
+    if (map.exit && !(o && o.showExit === false)) list.push({ type: 'exit', x: map.exit.x, y: map.exit.y });
+    var area = (P[2] - P[0] + 1) * (P[3] - P[1] + 1);
+    list.forEach(function (lm) {
+      var B = data.SPRITE_BOX[lm.type];
+      if (!B || lm.type === 'bridge' || lm.y <= y) return;
+      var dx = (lm.x - x) * T, dy = (lm.y - y) * T;
+      var w = Math.min(P[2], B[2] + dx) - Math.max(P[0], B[0] + dx) + 1;
+      var h = Math.min(P[3], B[3] + dy) - Math.max(P[1], B[1] + dy) + 1;
+      if (w > 0 && h > 0) worst = Math.max(worst, (w * h) / area);
+    });
+    return worst;
+  };
   function phrase(type) { return data.landmarkTypes[type].phrase; }
   function copyXY(p) { return p ? { x: p.x, y: p.y } : null; }
 
@@ -134,6 +178,22 @@
   data.ITEM_COUNT = 4;
   data.SIZES = ['small', 'big'];
   data.COLOURS = ['red', 'blue', 'green', 'yellow', 'brown', 'pink', 'purple', 'orange'];
+  /** Colours a child could mix up on a small picture. One game never uses both colours of a pair, so
+   *  "It is small and orange." can only be one of the four things. */
+  data.CONFUSABLE_COLOURS = [['yellow', 'orange'], ['red', 'orange'], ['brown', 'orange'], ['red', 'pink'], ['pink', 'purple'], ['yellow', 'brown']];
+  function coloursClash(a, b) {
+    return data.CONFUSABLE_COLOURS.some(function (p) { return (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a); });
+  }
+  data.coloursClash = coloursClash;
+  /** The first n colours of a shuffled list that do not clash with one another (there are always at least four). */
+  function distinctColours(shuffled, n) {
+    var out = [];
+    for (var i = 0; i < shuffled.length && out.length < n; i++) {
+      var c = shuffled[i];
+      if (!out.some(function (o) { return coloursClash(o, c); })) out.push(c);
+    }
+    return out;
+  }
   /** Eight common things that are easy to draw. Each game uses four of them. `colour` = the colour when no game is on. */
   data.POOL = [
     { id: 'key',  noun: 'key',  name: 'a key',  sizes: ['small'],        colour: 'yellow' },
@@ -550,7 +610,7 @@
     return maze.prepare({ id: 'warmup', tiles: tiles.slice(), landmarks: landmarks || [], start: start });
   }
   var T_UP = ['#######', '#.....#', '###.###', '###.###', '#######'];
-  var CROSS = ['#######', '###.###', '#.....#', '###.###', '###.###', '#######'];
+  var CROSS = ['#######', '###.###', '###.###', '#.....#', '###.###', '###.###', '#######'];
   var LAWN = ['#######', '#,,,,,#', '#,,,,,#', '#,,,,,#', '#######'];
   var LAWN_PATH = ['#######', '#,,,,,#', '#.....#', '#,,,,,#', '#######'];
   var PREPS = ['next to', 'behind', 'in front of', 'between', 'opposite'];
@@ -562,6 +622,8 @@
    *   never depend on whose left is meant (Pip cannot ask back in the warm-up). That question belongs to Guide.
    * type 'prep': look at the picture (Pip + landmarks on `map`), pick the word for the gap in `sentence`.
    *   Pictures are seen from the viewer: "behind" = further up the screen, "in front of" = further down.
+   *   In the "behind" and "in front of" pictures Pip looks AWAY from the viewer (facing N), so the word is the same
+   *   from the viewer's place and from Pip's own (behind: the landmark is at his back; in front of: he looks at it).
    *   `wrong` lists the words that are clearly false for the picture; two of them are offered with the right one. */
   function tUp(instruction, landmarks, correct) {
     return { type: 'path', instruction: instruction, map: wm(T_UP, landmarks, { x: 3, y: 3, facing: 'N' }),
@@ -569,9 +631,10 @@
       options: [{ id: 'left', tiles: [{ x: 2, y: 1 }, { x: 1, y: 1 }] }, { id: 'right', tiles: [{ x: 4, y: 1 }, { x: 5, y: 1 }] }], correct: correct };
   }
   function cross(instruction, landmarks, correct) {
-    return { type: 'path', instruction: instruction, map: wm(CROSS, landmarks, { x: 3, y: 4, facing: 'N' }),
-      approach: [{ x: 3, y: 3 }, { x: 3, y: 2 }],
-      options: [{ id: 'left', tiles: [{ x: 2, y: 2 }, { x: 1, y: 2 }] }, { id: 'straight', tiles: [{ x: 3, y: 1 }] }, { id: 'right', tiles: [{ x: 4, y: 2 }, { x: 5, y: 2 }] }],
+    /* every arm is two tiles long, so each "click here" arrow has its own tile and none sits on Pip's hat */
+    return { type: 'path', instruction: instruction, map: wm(CROSS, landmarks, { x: 3, y: 5, facing: 'N' }),
+      approach: [{ x: 3, y: 4 }, { x: 3, y: 3 }],
+      options: [{ id: 'left', tiles: [{ x: 2, y: 3 }, { x: 1, y: 3 }] }, { id: 'straight', tiles: [{ x: 3, y: 2 }, { x: 3, y: 1 }] }, { id: 'right', tiles: [{ x: 4, y: 3 }, { x: 5, y: 3 }] }],
       correct: correct };
   }
   function prep(r, word, sentence, tiles, landmarks, pip, wrong) {
@@ -605,7 +668,7 @@
     cross_right: function () { return cross('Turn right here.', [], 2); },
     walk_to: function (r) {
       var s = r.shuffle(data.SOLID_TYPES), arm = r.int(3);
-      return cross('Walk to ' + lmName(s[arm]) + '.', [{ type: s[0], x: 1, y: 1 }, { type: s[1], x: 3, y: 0 }, { type: s[2], x: 5, y: 1 }], arm);
+      return cross('Walk to ' + lmName(s[arm]) + '.', [{ type: s[0], x: 1, y: 2 }, { type: s[1], x: 3, y: 0 }, { type: s[2], x: 5, y: 2 }], arm);
     },
     /* ---- prep: look and choose the word */
     next_to_r: function (r) {
@@ -618,19 +681,19 @@
     },
     behind_1: function (r) {
       var s = r.pick(LOW_TYPES);
-      return prep(r, 'behind', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 3, y: 2 }], { x: 3, y: 1, facing: 'S' }, ['in front of', 'between', 'opposite']);
+      return prep(r, 'behind', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 3, y: 2 }], { x: 3, y: 1, facing: 'N' }, ['in front of', 'between', 'opposite']);
     },
     behind_2: function (r) {
       var s = r.pick(LOW_TYPES);
-      return prep(r, 'behind', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 2, y: 3 }], { x: 2, y: 2, facing: 'S' }, ['in front of', 'between', 'opposite']);
+      return prep(r, 'behind', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 2, y: 3 }], { x: 2, y: 2, facing: 'N' }, ['in front of', 'between', 'opposite']);
     },
     in_front_1: function (r) {
       var s = r.pick(data.SOLID_TYPES);
-      return prep(r, 'in front of', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 3, y: 1 }], { x: 3, y: 2, facing: 'S' }, ['behind', 'between', 'opposite']);
+      return prep(r, 'in front of', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 3, y: 1 }], { x: 3, y: 2, facing: 'N' }, ['behind', 'between', 'opposite']);
     },
     in_front_2: function (r) {
       var s = r.pick(data.SOLID_TYPES);
-      return prep(r, 'in front of', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 4, y: 2 }], { x: 4, y: 3, facing: 'S' }, ['behind', 'between', 'opposite']);
+      return prep(r, 'in front of', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 4, y: 2 }], { x: 4, y: 3, facing: 'N' }, ['behind', 'between', 'opposite']);
     },
     between: function (r) {
       var s = r.shuffle(data.SOLID_TYPES);
@@ -755,7 +818,7 @@
     var r = data.rng(seed);
     var picks = r.shuffle(data.POOL).slice(0, data.ITEM_COUNT);
     var shapes = r.shuffle(data.TEMPLATE_IDS);
-    var colours = r.shuffle(data.COLOURS);
+    var colours = distinctColours(r.shuffle(data.COLOURS), data.ITEM_COUNT);   /* four colours nobody can mix up */
     var items = [], goMaps = {};
     picks.forEach(function (p, i) {
       var colour = colours[i], size = r.pick(p.sizes), tpl = TEMPLATES[shapes[i]];

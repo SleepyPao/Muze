@@ -157,8 +157,10 @@
     brown:  ['#e8c890', '#b07c3c', '#7a4a2a'],
     pink:   ['#ffd0e4', '#ff8fbf', '#d0588e'],
     purple: ['#d9b8ff', '#9a5ad8', '#64329a'],
-    orange: ['#ffc58a', '#ff9a3c', '#c8661e']
+    orange: ['#ffb37a', '#f5781e', '#b4500f']      /* a deep orange, well away from the yellow */
   };
+  /* The lamp's glass is pale (white flame), never the yellow of the palette: a yellow lamp and an orange lamp must
+   * not look the same. A game also never has two things in colours a child could mix up (MR.data.CONFUSABLE_COLOURS). */
   var ITEM_COLOUR = { key: 'yellow', map: 'brown', lamp: 'red', bag: 'green', book: 'blue', ball: 'orange', hat: 'purple', cup: 'pink' };
   var ITEMS = {
     key: [
@@ -204,10 +206,10 @@
       '....kkkkkkkk....',
       '...k33333333k...',
       '..k1222222222k..',
-      '..k12zzzzzz23k..',
-      '..k12zYyyYz23k..',
-      '..k12zYyyYz23k..',
-      '..k12zzzzzz23k..',
+      '..k122zzzz223k..',
+      '..k122YwwY223k..',
+      '..k122YwwY223k..',
+      '..k122zzzz223k..',
       '..k2222222223k..',
       '...k33333333k...',
       '....k222222k....',

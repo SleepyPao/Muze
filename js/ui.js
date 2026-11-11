@@ -419,6 +419,7 @@
     var unlock = function () { MR.audio.unlock(); doc.removeEventListener('pointerdown', unlock, true); };
     doc.addEventListener('pointerdown', unlock, true);
     MR.on('state:change', ui.topbar.refresh);
+    MR.on('data:session', ui.topbar.refresh);     /* another game = other things: the slots are rebuilt (see refresh) */
     MR.on('ai:mode', ui.topbar.refresh);
     MR.on('audio:mute', function (muted) { MR.speech.setSpeakEnabled(!muted); ui.topbar.refresh(); });
     MR.speech.setSpeakEnabled(!MR.audio.isMuted());

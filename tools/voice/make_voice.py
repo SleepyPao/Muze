@@ -17,6 +17,8 @@ def main():
     ap.add_argument('--length-scale', type=float, default=1.1, help='> 1 = slower, clearer speech for young learners')
     ap.add_argument('--volume', type=float, default=0.85)
     ap.add_argument('--kbps', type=int, default=48)
+    ap.add_argument('--only-new', action='store_true',
+                    help='keep the clips of lines that are already recorded; record only new lines (clips of removed lines are deleted)')
     a = ap.parse_args()
 
     from piper import PiperVoice, SynthesisConfig
@@ -29,8 +31,20 @@ def main():
     outdir = os.path.join(ROOT, 'assets', 'voice')
     os.makedirs(outdir, exist_ok=True)
     keep, table = set(), {}
+    old = {}
+    if a.only_new:
+        try:
+            with open(os.path.join(ROOT, 'js', 'voice-data.js'), encoding='utf-8') as f:
+                src = f.read()
+            old = json.loads(src[src.index('window.MR_VOICE = ') + len('window.MR_VOICE = '):].rstrip().rstrip(';'))
+        except (OSError, ValueError):
+            old = {}
     for text in lines:
         name = hashlib.sha1(text.encode('utf-8')).hexdigest()[:12] + '.mp3'
+        if text in old and old[text][0] == 'assets/voice/' + name and os.path.isfile(os.path.join(outdir, name)):
+            keep.add(name)
+            table[text] = old[text]
+            continue
         buf = io.BytesIO()
         with wave.open(buf, 'wb') as w:
             voice.synthesize_wav(text.replace('…', '...'), w, syn_config=cfg)

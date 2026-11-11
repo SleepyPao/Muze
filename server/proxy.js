@@ -9,31 +9,49 @@
  * - POST /api/chat  -> forwards the chat request to DeepSeek with the key from the environment.
  *   The key never reaches a browser. The relay forwards only model / messages / response_format /
  *   temperature / max_tokens; it adds nothing about the pupil and writes no request bodies to disk or console.
+ *   Only the game's own page may use it: the request must be JSON (Content-Type: application/json), come from
+ *   this server's own origin, and name this computer in its Host header. Another web page cannot spend the key.
  * - GET /config.local.js is GENERATED here ({ proxyUrl: '/api/chat' }); a real config.local.js on disk is never served.
  * - Without DEEPSEEK_API_KEY the relay still serves the game, in Demo mode.
+ * - A bad request never stops the server (every file access is guarded).
  *
  * Environment: DEEPSEEK_API_KEY, PORT (8787), HOST (0.0.0.0), DEEPSEEK_BASE_URL (https://api.deepseek.com),
- *              DEEPSEEK_MODEL (deepseek-flash), UPSTREAM_TIMEOUT_MS (10000)
+ *              DEEPSEEK_MODEL (deepseek-flash), UPSTREAM_TIMEOUT_MS (10000),
+ *              ALLOWED_HOSTS (extra host names pupils may type, comma separated, e.g. "teacher-laptop.school.lan")
  */
 'use strict';
 var http = require('http');
 var https = require('https');
 var fs = require('fs');
 var path = require('path');
+var os = require('os');
 var URL = require('url').URL;
 
 var vm = require('vm');
 var ROOT = path.resolve(__dirname, '..');
 
-/** Read config.local.js on the SERVER (it is never sent to a browser). Returns window.MR_CONFIG or {}. */
-function readLocalConfig(file) {
+/** Read config.local.js on the SERVER (it is never sent to a browser). Returns window.MR_CONFIG or {}.
+ *  A missing file is normal (Demo mode). A file that cannot be run (a typing mistake) gives {} and ONE warning line,
+ *  so the teacher knows why the AI is off. The file runs in an empty sandbox with a 200 ms limit, which also covers
+ *  promise loops (microtaskMode), so a broken file can never hang the server.
+ *  @param {string} file  @param {function(string)} [warn]  default: console.error */
+function readLocalConfig(file, warn) {
+  var src;
+  try { src = fs.readFileSync(file, 'utf8'); }
+  catch (e) {
+    if (e && e.code !== 'ENOENT') (warn || console.error)('config.local.js could not be read: ' + e.message);
+    return {};
+  }
   try {
-    var src = fs.readFileSync(file, 'utf8');
-    var sandbox = { window: {} };
-    vm.runInNewContext(src, sandbox, { timeout: 200, filename: 'config.local.js' });
-    var c = sandbox.window.MR_CONFIG;
-    return c && typeof c === 'object' ? c : {};
-  } catch (e) { return {}; }
+    var ctx = vm.createContext({ window: {} }, { microtaskMode: 'afterEvaluate' });
+    vm.runInContext(src, ctx, { timeout: 200, filename: 'config.local.js' });
+    /* copy plain values out of the sandbox (no getters or sandbox objects leave it) */
+    var c = JSON.parse(vm.runInContext('JSON.stringify(window.MR_CONFIG || null)', ctx, { timeout: 200 }) || 'null');
+    return c && typeof c === 'object' && !Array.isArray(c) ? c : {};
+  } catch (e2) {
+    (warn || console.error)('config.local.js has a mistake and was NOT used (' + String(e2 && e2.message).split('\n')[0] + '). The game runs in Demo mode.');
+    return {};
+  }
 }
 var LOCAL = readLocalConfig(process.env.MR_LOCAL_CONFIG || path.join(ROOT, 'config.local.js'));
 var PORT = parseInt(process.env.PORT || '8787', 10);
@@ -64,6 +82,7 @@ function sendJSON(res, status, obj) { send(res, status, JSON.stringify(obj)); }
 function serveStatic(req, res, pathname) {
   var rel;
   try { rel = decodeURIComponent(pathname).replace(/^\/+/, ''); } catch (e) { return send(res, 400, 'Bad request', 'text/plain'); }
+  if (rel.indexOf('\0') >= 0) return send(res, 400, 'Bad request', 'text/plain');     /* "%00": fs would throw */
   if (rel === '') rel = 'index.html';
   if (rel === 'config.local.js') {
     var cfg = KEY ? { proxyUrl: '/api/chat', model: MODEL } : { offline: true };
@@ -76,11 +95,22 @@ function serveStatic(req, res, pathname) {
   var top = inside.split(path.sep)[0];
   var allowed = PUBLIC_FILES.indexOf(inside) >= 0 || (PUBLIC_DIRS.indexOf(top) >= 0 && inside !== top);
   if (!allowed || inside.split(path.sep).some(function (p) { return p.charAt(0) === '.'; })) return send(res, 404, 'Not found', 'text/plain');
-  fs.stat(file, function (err, st) {
-    if (err || !st.isFile()) return send(res, 404, 'Not found', 'text/plain');
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
-    fs.createReadStream(file).pipe(res);
-  });
+  try {
+    fs.stat(file, function (err, st) {
+      if (err || !st.isFile()) return send(res, 404, 'Not found', 'text/plain');
+      var stream;
+      try { stream = fs.createReadStream(file); } catch (e) { return send(res, 500, 'Server error', 'text/plain'); }
+      stream.on('error', function () {                 /* the file went away or cannot be read: end the answer, keep serving */
+        if (!res.headersSent) send(res, 404, 'Not found', 'text/plain'); else res.destroy();
+      });
+      stream.once('open', function () {
+        res.writeHead(200, { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Content-Length': st.size, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+        if (req.method === 'HEAD') { stream.destroy(); return res.end(); }
+        stream.pipe(res);
+      });
+      res.on('close', function () { stream.destroy(); });
+    });
+  } catch (e) { send(res, 400, 'Bad request', 'text/plain'); }   /* a path Node refuses */
 }
 
 /* ---------- rate limit ---------- */
@@ -113,7 +143,39 @@ function cleanRequest(body) {
     stream: false
   };
 }
+/* ---------- who may use the relay ----------
+ * Only the game page this server serves. A page from another site could otherwise POST to http://localhost:8787/api/chat
+ * and spend the key (it cannot read the answer, but the request is paid for). Three checks:
+ *   1. Content-Type must be application/json. Another site cannot send that without a CORS preflight, and this server
+ *      never answers a preflight.
+ *   2. Origin (browsers send it with every POST) / Sec-Fetch-Site must be this server itself.
+ *   3. Host must be a name of this computer (stops "DNS rebinding": a foreign name that points at 127.0.0.1). */
+function localNames() {
+  var names = { 'localhost': true, '127.0.0.1': true, '[::1]': true };
+  names[String(os.hostname()).toLowerCase()] = true;
+  names[String(os.hostname()).toLowerCase().replace(/\.local$/, '') + '.local'] = true;
+  var ifs = os.networkInterfaces();
+  Object.keys(ifs).forEach(function (k) { (ifs[k] || []).forEach(function (a) { names[a.family === 'IPv6' || a.family === 6 ? '[' + a.address.toLowerCase() + ']' : a.address] = true; }); });
+  if (HOST && HOST !== '0.0.0.0' && HOST !== '::') names[HOST.toLowerCase()] = true;
+  String(process.env.ALLOWED_HOSTS || '').split(',').forEach(function (h) { h = h.trim().toLowerCase(); if (h) names[h] = true; });
+  return names;
+}
+function hostName(host) { return String(host || '').toLowerCase().replace(/:\d+$/, ''); }
+/** null when the request may use the relay, else {status, error}. */
+function relayRefusal(req) {
+  var type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return { status: 415, error: 'Content-Type must be application/json' };
+  var host = String(req.headers.host || '').toLowerCase();
+  if (!host || !localNames()[hostName(host)]) return { status: 403, error: 'unknown host' };
+  var origin = req.headers.origin;
+  if (origin != null && String(origin).toLowerCase() !== 'http://' + host) return { status: 403, error: 'other origin' };
+  var site = req.headers['sec-fetch-site'];
+  if (site != null && site !== 'same-origin') return { status: 403, error: 'other origin' };
+  return null;
+}
 function relay(req, res) {
+  var no = relayRefusal(req);
+  if (no) { req.resume(); return sendJSON(res, no.status, { error: no.error }); }
   if (!KEY) return sendJSON(res, 503, { error: 'relay has no API key' });
   if (limited(req.socket.remoteAddress || '?')) return sendJSON(res, 429, { error: 'too many requests' });
   var chunks = [], size = 0, tooBig = false;
@@ -164,15 +226,32 @@ var server = http.createServer(function (req, res) {
     if (req.method !== 'POST') return sendJSON(res, 405, { error: 'POST only' });
     return relay(req, res);
   }
-  if (pathname === '/api/health') return sendJSON(res, 200, { ok: true, ai: !!KEY, model: MODEL });
+  if (pathname === '/api/health') return sendJSON(res, 200, { ok: true, app: 'maze-rescue', ai: !!KEY, model: MODEL });
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed', 'text/plain');
   serveStatic(req, res, pathname);
 });
 
+server.on('clientError', function (err, socket) { try { socket.destroy(); } catch (e) { /* ignore */ } });
+
+/** The address to show and to open. Always "localhost" for this computer: Chrome keeps the microphone permission
+ *  per address, and http://localhost:8787 and http://127.0.0.1:8787 count as two different sites. */
+function publicUrl(host, port) {
+  var local = !host || host === '0.0.0.0' || host === '::' || host === '127.0.0.1' || host === '::1' || host === 'localhost';
+  return 'http://' + (local ? 'localhost' : host) + ':' + port + '/';
+}
+
 if (require.main === module) {
+  server.on('error', function (err) {
+    if (err && err.code === 'EADDRINUSE') {
+      console.error('Port ' + PORT + ' is busy - is Maze Rescue already open? Close the other window (or the other program on port ' + PORT + ') and start again.');
+    } else {
+      console.error('Maze Rescue could not start: ' + (err && err.message));
+    }
+    process.exit(1);
+  });
   server.listen(PORT, HOST, function () {
-    console.log('Maze Rescue relay on http://' + (HOST === '0.0.0.0' ? 'localhost' : HOST) + ':' + PORT + '/');
+    console.log('Maze Rescue relay on ' + publicUrl(HOST, PORT));
     console.log(KEY ? 'AI: on (model ' + MODEL + ', key from ' + KEY_SOURCE + ', kept on this computer)' : 'AI: OFF - no key, the game runs in Demo mode');
   });
 }
-module.exports = { server: server, cleanRequest: cleanRequest, readLocalConfig: readLocalConfig };
+module.exports = { server: server, cleanRequest: cleanRequest, readLocalConfig: readLocalConfig, relayRefusal: relayRefusal, publicUrl: publicUrl };

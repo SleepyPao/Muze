@@ -119,9 +119,11 @@
   var SEE = '(?:you (?:can )?(?:see|get to|reach|are at|come to|find) )?';
   var RE = {
     stop: /^(?:stop|wait|halt|stay)(?: here| there)?$/,
-    turnAround: /^(?:turn|go) (?:around|round|back)$/,
-    turn: /^(turn|go|walk|move|take a|take the)?\s*(?:to )?(?:the )?(?:(your|my|pip's|his) )?(left|right)(?: (?:side|hand|turn))?$/,
-    whoseOnly: /^(?:(your|my|pip's|his) (left|right)|(yours|mine|your|my|you|me))$/,
+    /* "turn around", "turn back", "go back", "turn right around" ...: ONE half turn, never a left / right question */
+    turnAround: /^(?:(?:turn|go|walk|look)(?: right| all the way)? (?:around|round|back|backwards?)|about turn)$/,
+    /* whose left: "your / Pip's / her / his / their left" = Pip's own side; "my left" = the pupil's side */
+    turn: /^(turn|go|walk|move|take a|take the)?\s*(?:to )?(?:the )?(?:(your|my|pip's|pips|pip|his|her|their) )?(left|right)(?: (?:side|hand|turn))?$/,
+    whoseOnly: /^(?:(your|my|pip's|pips|pip|his|her|their) (left|right)|(yours|mine|your|my|you|me|pip's|pips|pip|his|hers|her|theirs|their))$/,
     bareTurn: /^(?:turn|turning)$/,
     atFirst: new RegExp('^(?:at|when|after|by|near)\\s+' + SEE + '(?:the |a |an )?([a-z ]+?) (turn(?: .*)?|go(?: .*)?|walk(?: .*)?|stop|left|right)$'),
     atLast: new RegExp('^(turn(?: [a-z\' ]+?)?|stop) (?:at|when|after|by|near)\\s+' + SEE + '(?:the |a |an )?([a-z ]+)$'),
@@ -148,6 +150,7 @@
     if (/^(?:please|pip|ok|okay|now|first|next|so|hey|and|then)$/.test(c)) return '';
     return c;
   }
+  /** 'my' = the pupil's own side; everything else ("your", "Pip's", "her", "his", "their") = Pip's side ('your'). */
   function whoseOf(w) {
     if (!w) return undefined;
     return (w === 'my' || w === 'mine' || w === 'me') ? 'my' : 'your';
@@ -163,7 +166,7 @@
     var m, lm;
     if (RE.stop.test(c)) return { actions: [{ type: 'stop' }] };
     if (RE.bareTurn.test(c)) return clar('dir', MR.data.text.leftOrRight);
-    if (RE.turnAround.test(c)) return { actions: [{ type: 'turn', dir: 'left' }, { type: 'turn', dir: 'left' }] };
+    if (RE.turnAround.test(c)) return { actions: [{ type: 'turn', dir: 'around' }] };
 
     /* answers to "My left or your left?": "your left", "mine", ... */
     if ((m = RE.whoseOnly.exec(c))) {
@@ -173,7 +176,7 @@
       }
     }
     if ((m = RE.turn.exec(c))) {
-      var verb = m[1], whose = whoseOf(m[2] && m[2].replace(/pip's|his/, 'your'));
+      var verb = m[1], whose = whoseOf(m[2]);
       var turn = { type: 'turn', dir: m[3] };
       if (whose) turn.whose = whose;
       if (verb === 'turn' || (verb && /^take/.test(verb))) return { actions: [turn] };
@@ -218,7 +221,8 @@
    * @param {string} text
    * @param {{expect?:('dir'|'whose'|null), pendingDir?:('left'|'right')}} [ctx]  what Pip just asked, if anything
    * @returns {{actions:Array, clarify:(string|null), clarifyKind:(null|'dir'|'landmark'|'oneword'|'unknown'), landmark?:string}}
-   *   actions: [{type:'forward', steps?:n, until?:landmarkType} | {type:'turn', dir:'left'|'right', whose?:'your'|'my'} | {type:'stop'}]
+   *   actions: [{type:'forward', steps?:n, until?:landmarkType} | {type:'turn', dir:'left'|'right', whose?:'your'|'my'} |
+   *             {type:'turn', dir:'around'} | {type:'stop'}]      ("turn around" is ONE action and never has `whose`)
    *   If any clause is not understood, actions is [] and clarify holds ONE question.
    */
   rules.parseGuide = function (text, ctx) {

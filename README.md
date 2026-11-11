@@ -35,6 +35,8 @@ INT4099 小组展示用的可运行原型。对象是香港小五、小六学生
 
 同一台设备可以让多名学生先后各玩一局，证据按班号分开。多台设备的数据可在老师视图里用 "Import JSON" 合并。
 
+**"Go straight" 规则：** 只说 "go straight" 时 Pip 会一直走到这条路的尽头，不在岔路口停。想让 Pip 中途停下，要说清楚停在哪里：`go straight until the well`、`go straight 2 steps`、`turn left at the well`。Pip 只能沿直线走，不会自己拐弯找路；要去不在正前方的地标，需要学生一步步指挥。
+
 **左右规则：** left / right 指 Pip 自己的左右。热身题里 Pip 总是背对学生走（学生的左 = Pip 的左），不会出现歧义。
 Guide 阶段 Pip 面朝学生时，第一次说 left/right 会反问 "My left or your left?"；Pip 记住学生的回答，这条路线里不再追问，也不会悄悄换成另一种理解。
 

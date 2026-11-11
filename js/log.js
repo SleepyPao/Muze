@@ -97,7 +97,8 @@
       first: !!o.first, first_choice_correct: !!o.first_choice_correct });
   };
   /** One Guide instruction. `rewrite_success` is filled in here: true/false on the turn right after a clarification, else null.
-   *  o: {route_id, input_mode, asr_text, sent_text, parsed_actions:[...], clarify_triggered, ai_reply, hit_wall, reached_exit, source, ai_failed} */
+   *  o: {route_id, maze_id, input_mode, asr_text, sent_text, parsed_actions:[...], clarify_triggered, ai_reply, hit_wall, reached_exit, source, ai_failed}
+   *  parsed_actions must be exactly what was given to MR.guide.execute (after merging an answer): MR.guide.replay runs them again. */
   log.guideTurn = function (o) {
     load();
     var classNo = o.class_no || classNoNow();
@@ -110,7 +111,8 @@
       parsed_actions: o.parsed_actions || [], clarify_triggered: clar,
       rewrite_success: prev && prev.clarify_triggered ? (!clar && !o.ai_failed && (o.parsed_actions || []).length > 0) : null,
       hit_wall: !!o.hit_wall, reached_exit: !!o.reached_exit, ai_failed: !!o.ai_failed, source: o.source || '',
-      maze_id: o.maze_id || null, note: o.note || ''
+      maze_id: o.maze_id || null, note: o.note || '',
+      engine: o.engine != null ? o.engine : ((MR.guide && MR.guide.ENGINE) || 0)   /* which rules ran it (MR.guide.replay) */
     });
   };
   /** Any other record, e.g. log.event('warmup','summary',{correct:8,total:10}), log.event('go','pickup',{item_id}),

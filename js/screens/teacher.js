@@ -68,7 +68,7 @@
       if (e.hit_wall) flags.push('wall');
       if (e.reached_exit) flags.push('exit');
       if (e.ai_failed) flags.push('AI failed (not counted)');
-      if (e.parsed_actions && e.parsed_actions.length) flags.push(e.parsed_actions.map(function (a) { return a.type === 'turn' ? 'turn ' + (a.whose ? a.whose + ' ' : '') + a.dir : (a.type === 'forward' ? 'forward' + (a.steps ? ' ' + a.steps : '') + (a.until ? ' to ' + a.until : '') : a.type); }).join(', '));
+      if (e.parsed_actions && e.parsed_actions.length) flags.push(e.parsed_actions.map(actionText).join(', '));
       var asr = e.input_mode === 'speech' ? (e.asr_text || '') + (e.asr_text && e.asr_text !== e.sent_text ? ' (edited)' : '') : '';
       var reply = e.ai_reply || (e.event === 'summary' ? e.correct + ' / ' + e.total + ' right' : (e.event === 'self_review' ? JSON.stringify(e.answers) :
         (e.event === 'session' ? (e.items || []).map(function (it) { return it.id; }).join(', ') + (e.difficulty ? ' · ' + e.difficulty : '') : '')));
@@ -165,6 +165,15 @@
     ])));
   }
 
+  /** One parsed Guide action in words for the teacher: "turn left (Pip's side)", "turn around", "forward to well". */
+  function actionText(a) {
+    if (a.type === 'turn') {
+      if (a.dir === 'around') return 'turn around';
+      return 'turn ' + a.dir + (a.whose === 'my' ? ' (pupil’s side)' : (a.whose === 'your' ? ' (Pip’s side)' : ''));
+    }
+    if (a.type === 'forward') return 'forward' + (a.steps ? ' ' + a.steps : '') + (a.until ? ' to ' + MR.data.landmarkName(a.until) : '');
+    return a.type;
+  }
   MR.screens.register('teacher', {
     mount: function (rootEl, params) {
       ui.topbar.setStage('Teacher view');

@@ -15,6 +15,7 @@ cp -R .venv-voice/lib/python3*/site-packages/piper/espeak-ng-data /tmp/ed
 ```
 
 Options: `--length-scale 1.1` (higher = slower, clearer), `--volume 0.85`, `--kbps 48`.
+`--only-new` keeps the clips of lines that have not changed and records only the new lines (clips of removed lines are deleted).
 
 `node tools/voice/lines.js` prints the list of lines that will be recorded. The end-to-end test fails if
 Pip says a fixed line that has no clip.

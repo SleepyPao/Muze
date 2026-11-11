@@ -29,9 +29,6 @@
 
   root.addEventListener('error', function (e) { if (root.console) root.console.error('[MR] error', e.message); });
 
-  /* A new game can have other things: the top bar rebuilds its slots from this game's things */
-  MR.on('data:session', function () { MR.ui.topbar.refresh(); });
-
   /* ------------------------------------------------------------ example evidence (debug / teacher demo) */
   /** Play a few turns through the real APIs so the Review and Teacher screens have something to show. */
   MR.demoEvidence = function (classNo, quality, seed) {
@@ -69,21 +66,25 @@
       function sayLine(text) {
         var p = MR.rules.parseGuide(text, ctx), res = null, actions = p.actions, answer = null;
         if (actions.length) {
-          if (pending) { actions = MR.guide.mergeAnswer(pending, actions); pending = null; }
+          /* the same rule as the Guide screen: only an answer ("your left" / "my left") replaces the turn Pip asked about */
+          if (pending) { if (actions[0].type === 'turn' && actions[0].whose) actions = MR.guide.mergeAnswer(pending, actions); pending = null; }
           res = MR.guide.execute(mz, run, actions);
           if (res.status === 'clarify' && res.clarify.kind === 'whose') {
             pending = res.pending; ctx = { expect: 'whose', pendingDir: res.clarify.dir };
             answer = (good ? 'your ' : 'my ') + res.clarify.dir;
           } else ctx = {};
-        } else { ctx = p.clarifyKind === 'dir' ? { expect: 'dir' } : {}; }
+        } else if (p.clarifyKind === 'dir') ctx = { expect: 'dir' };
+        else if (!pending) ctx = {};
         MR.log.guideTurn({ route_id: rid, maze_id: mz.id, input_mode: 'text', sent_text: text, parsed_actions: actions, clarify_triggered: !actions.length || (res && res.status === 'clarify'),
           ai_reply: res ? (res.say || 'OK!') : p.clarify, hit_wall: !!(res && res.hit_wall), reached_exit: !!(res && res.reached_exit), note: res && res.note ? res.note : '', source: 'rules' });
         return answer;
       }
       function lineFor(a) {
-        if (a.type === 'turn') return run.facing === 'S' && run.whoseMode === 'my' ? 'Turn your ' + a.dir + '.' : 'Turn ' + a.dir + '.';
+        /* the plan is in Pip's own left / right. A pupil who told Pip "my left" (run.whoseMode 'my') says the screen side
+         * while Pip faces the viewer - Pip remembers, so no "your" is needed. */
+        if (a.type === 'turn') return 'Turn ' + (run.facing === 'S' && run.whoseMode === 'my' ? (a.dir === 'left' ? 'right' : 'left') : a.dir) + '.';
         var seen = MR.maze.visibleAhead(mz, run, run.facing).filter(function (v) { return v.dist === a.steps; })[0];
-        if (seen) return seen.type === 'exit' ? 'Go to the exit.' : 'Go straight until the ' + MR.guide.label(seen.type) + '.';
+        if (seen) return seen.type === 'exit' ? 'Go to the way out.' : 'Go straight until the ' + MR.data.landmarkName(seen.type) + '.';
         return 'Go forward ' + a.steps + (a.steps === 1 ? ' step.' : ' steps.');
       }
       while (queue.length && guard++ < 40) { var ans = sayLine(queue.shift()); if (ans) queue.unshift(ans); }

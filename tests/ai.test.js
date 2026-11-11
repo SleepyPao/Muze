@@ -184,6 +184,39 @@ test('Guide: rules first; the model is only asked when the rules do not understa
   assert.equal(g.failed, true); assert.equal(g.reply, 'Sorry, can you say that again?');
 });
 
+test('Guide: the model is told the question Pip REALLY asked ("My right or your right?"), and may answer with a half turn', async () => {
+  const MR = fresh();
+  const calls = online(MR, [
+    '{"actions":[{"type":"turn","dir":"right","whose":"your"}],"clarify":null}',
+    '{"actions":[{"type":"turn","dir":"left","whose":"my"}],"clarify":null}',
+    '{"actions":[],"clarify":"Left or right?"}',
+    '{"actions":[{"type":"turn","dir":"around","whose":"my"},{"type":"forward"}],"clarify":null}',
+    '{"actions":[{"type":"turn","dir":"sideways"}],"clarify":null}'
+  ]);
+  let g = await MR.ai.guide({ text: 'the one of the little explorer girl', ctx: { expect: 'whose', pendingDir: 'right' } });
+  assert.equal(JSON.parse(calls[0].body.messages[1].content).pip_just_asked, 'My right or your right?');
+  assert.deepEqual(g.actions, [{ type: 'turn', dir: 'right', whose: 'your' }]);
+  g = await MR.ai.guide({ text: 'the one of the child at the computer', ctx: { expect: 'whose', pendingDir: 'left' } });
+  assert.equal(JSON.parse(calls[1].body.messages[1].content).pip_just_asked, 'My left or your left?');
+  g = await MR.ai.guide({ text: 'that way over there maybe', ctx: { expect: 'dir' } });
+  assert.equal(JSON.parse(calls[2].body.messages[1].content).pip_just_asked, 'Left or right?');
+  g = await MR.ai.guide({ text: 'no question was asked this time ok' });
+  assert.ok(!('pip_just_asked' in JSON.parse(calls[3].body.messages[1].content)));
+  assert.deepEqual(g.actions, [{ type: 'turn', dir: 'around' }, { type: 'forward' }], 'a half turn from the model never keeps "whose"');
+  g = await MR.ai.guide({ text: 'spin to some side i think' });
+  assert.equal(g.clarify, MR.data.text.guideUnclear, 'an unknown turn is not understood');
+  /* the prompt allows exactly what the engine allows */
+  assert.match(MR.ai.GUIDE_SYSTEM, /"dir": "around"/);
+  assert.match(MR.ai.GUIDE_SYSTEM, /her left/);
+  /* the rules answer these without the model */
+  const before = calls.length;
+  g = await MR.ai.guide({ text: 'her right', ctx: { expect: 'whose', pendingDir: 'right' } });
+  assert.deepEqual([g.source, g.actions], ['rules', [{ type: 'turn', dir: 'right', whose: 'your' }]]);
+  g = await MR.ai.guide({ text: 'turn around' });
+  assert.deepEqual([g.source, g.actions], ['rules', [{ type: 'turn', dir: 'around' }]]);
+  assert.equal(calls.length, before);
+});
+
 test('speech: feature detection is safe without browser APIs', async () => {
   const MR = fresh();
   assert.equal(MR.speech.canListen(), false);

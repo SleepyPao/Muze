@@ -295,28 +295,28 @@
       g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(X + 3, Y + 18, 10, 2); g.fillRect(X + 4, Y + 17, 8, 4);
       g.drawImage(S.pip(pip.facing, frame), X, Y - (pip.walking && frame === 1 ? 1 : 0));
     }
-    function drawFacingArrow() {
-      if (!opts.facingArrow || pip.hidden || pip.walking) return;
+    /* The yellow chevron that shows where Pip is looking. It sits on the side Pip faces and its TIP points the
+     * same way (facing E: a ">" to the right of Pip). Rows / columns run from the wide end (near Pip) to the tip. */
+    function facingArrowPoints() {
       var d = maze.DIRS[pip.facing];
       var off = pip.facing === 'N' ? 21 : 13;
       var cx = Math.round(pip.x * T + 8 + d.dx * off), cy = Math.round(PAD + pip.y * T + 9 + d.dy * off);
       var bob = Math.round(Math.sin(now / 220) * 1.5);
       cx += d.dx * bob; cy += d.dy * bob;
-      /* a chevron pointing in the facing direction */
+      var pts = [];
       for (var i = 0; i < 4; i++) {
-        var a = 3 - i;
-        var pts = pip.facing === 'N' ? [[cx - a, cy - 1 + i], [cx + a, cy - 1 + i]] :
-          pip.facing === 'S' ? [[cx - a, cy + 1 - i], [cx + a, cy + 1 - i]] :
-            pip.facing === 'E' ? [[cx + 1 - i, cy - a], [cx + 1 - i, cy + a]] : [[cx - 1 + i, cy - a], [cx - 1 + i, cy + a]];
-        pts.forEach(function (p) { px(g, p[0] - 1, p[1] - 1, 3, 3, '#3a2830'); });
+        var a = 3 - i;                                   /* half width: 3 at the wide end, 0 at the tip */
+        var px0 = cx + d.dx * (i - 1), py0 = cy + d.dy * (i - 1);   /* i steps along the facing direction */
+        if (d.dx) { pts.push([px0, py0 - a]); pts.push([px0, py0 + a]); }
+        else { pts.push([px0 - a, py0]); pts.push([px0 + a, py0]); }
       }
-      for (i = 0; i < 4; i++) {
-        var b = 3 - i;
-        var q = pip.facing === 'N' ? [[cx - b, cy - 1 + i], [cx + b, cy - 1 + i]] :
-          pip.facing === 'S' ? [[cx - b, cy + 1 - i], [cx + b, cy + 1 - i]] :
-            pip.facing === 'E' ? [[cx + 1 - i, cy - b], [cx + 1 - i, cy + b]] : [[cx - 1 + i, cy - b], [cx - 1 + i, cy + b]];
-        q.forEach(function (p) { px(g, p[0], p[1], 1, 1, '#ffd84a'); });
-      }
+      return { points: pts, tip: pts[pts.length - 1], centre: [cx, cy] };
+    }
+    function drawFacingArrow() {
+      if (!opts.facingArrow || pip.hidden || pip.walking) return;
+      var pts = facingArrowPoints().points;
+      pts.forEach(function (p) { px(g, p[0] - 1, p[1] - 1, 3, 3, '#3a2830'); });
+      pts.forEach(function (p) { px(g, p[0], p[1], 1, 1, '#ffd84a'); });
     }
     function drawItem() {
       if (!item || !item.visible) return;
@@ -444,8 +444,9 @@
         });
         if (opts.showExit !== false && map.exit && map.exit.y === y) drawEntitySprite(S.landmark('exit', lf), map.exit.x, map.exit.y);
         if (item && item.y === y) drawItem();
-        if (pipRow === y) { drawPipSprite(); drawFacingArrow(); }
+        if (pipRow === y) drawPipSprite();
       }
+      drawFacingArrow();            /* after every row, so no hedge or landmark can hide where Pip is looking */
       drawPings();
       drawMarkers();
       drawParticles(dt);
@@ -574,7 +575,9 @@
       debugState: function () {
         return { pip: { x: pip.x, y: pip.y, facing: pip.facing, walking: pip.walking }, highlights: highlights.map(function (h) { return { id: h.id, tiles: h.tiles }; }),
           markers: markers.length, item: item ? { visible: item.visible } : null, trail: trail.length, emote: emote && emote.kind,
-          pings: pings.map(function (p) { return { x: p.x, y: p.y }; }), labels: labels.map(function (l) { return { x: l.x, y: l.y, text: l.el.textContent }; }) };
+          pings: pings.map(function (p) { return { x: p.x, y: p.y }; }), labels: labels.map(function (l) { return { x: l.x, y: l.y, text: l.el.textContent }; }),
+          /* the facing chevron in base pixels (tests): tip = its point, centre = its middle, pipCentre = the middle of Pip's tile */
+          arrow: opts.facingArrow && !pip.hidden ? (function () { var a = facingArrowPoints(); return { tip: a.tip, centre: a.centre, pipCentre: [pip.x * T + 8, PAD + pip.y * T + 8] }; })() : null };
       },
       destroy: function () {
         var i = render.active.indexOf(sc); if (i >= 0) render.active.splice(i, 1);

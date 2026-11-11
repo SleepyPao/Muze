@@ -65,6 +65,14 @@ window.MR_VOICE = {
   "assets/voice/5acfa2bc5f6c.mp3",
   2.75
  ],
+ "I can’t see a big tree. What can I see?": [
+  "assets/voice/6f527234bff3.mp3",
+  2.89
+ ],
+ "I can’t see a blue fountain. What can I see?": [
+  "assets/voice/e8b6f9c40fb4.mp3",
+  3.22
+ ],
  "I can’t see a bridge. What can I see?": [
   "assets/voice/c76d2db75ef0.mp3",
   2.89
@@ -72,10 +80,6 @@ window.MR_VOICE = {
  "I can’t see a door. What can I see?": [
   "assets/voice/471161f0dce6.mp3",
   2.61
- ],
- "I can’t see a fountain. What can I see?": [
-  "assets/voice/9522e544f4a4.mp3",
-  2.73
  ],
  "I can’t see a green door. What can I see?": [
   "assets/voice/b5b8ef28c807.mp3",
@@ -89,9 +93,9 @@ window.MR_VOICE = {
   "assets/voice/e23dc873624c.mp3",
   2.96
  ],
- "I can’t see a tree. What can I see?": [
-  "assets/voice/3b26abc00b17.mp3",
-  2.45
+ "I can’t see a way out. What can I see?": [
+  "assets/voice/f9c93fdc5a14.mp3",
+  2.71
  ],
  "I can’t see a well. What can I see?": [
   "assets/voice/c423b48d6562.mp3",
@@ -100,10 +104,6 @@ window.MR_VOICE = {
  "I can’t see a windmill. What can I see?": [
   "assets/voice/0e8f8836c8ff.mp3",
   2.73
- ],
- "I can’t see an exit. What can I see?": [
-  "assets/voice/4c1208062ef3.mp3",
-  2.96
  ],
  "I can’t see the way out. Tell me where to go!": [
   "assets/voice/602c5b2f6fde.mp3",
@@ -573,9 +573,9 @@ window.MR_VOICE = {
   "assets/voice/683954314948.mp3",
   1.89
  ],
- "Take the path next to the fountain.": [
-  "assets/voice/a21112c5d974.mp3",
-  1.89
+ "Take the path next to the blue fountain.": [
+  "assets/voice/049fec67973f.mp3",
+  2.44
  ],
  "Take the path next to the well.": [
   "assets/voice/6119444a8e0d.mp3",
@@ -593,17 +593,17 @@ window.MR_VOICE = {
   "assets/voice/3b1ed83d4e73.mp3",
   1.5
  ],
- "Turn left at the fountain.": [
-  "assets/voice/822ff7b6f281.mp3",
-  1.6
+ "Turn left at the big tree.": [
+  "assets/voice/638eaa42dade.mp3",
+  1.75
+ ],
+ "Turn left at the blue fountain.": [
+  "assets/voice/7e4db95363d0.mp3",
+  2.01
  ],
  "Turn left at the scarecrow.": [
   "assets/voice/49ae59ec4470.mp3",
   1.81
- ],
- "Turn left at the tree.": [
-  "assets/voice/1c34e5bfff67.mp3",
-  1.61
  ],
  "Turn left at the well.": [
   "assets/voice/815fa6a0c6f5.mp3",
@@ -621,17 +621,17 @@ window.MR_VOICE = {
   "assets/voice/2df32049126e.mp3",
   1.29
  ],
- "Turn right at the fountain.": [
-  "assets/voice/e2adf98ab64c.mp3",
-  1.61
+ "Turn right at the big tree.": [
+  "assets/voice/96b7086bf56c.mp3",
+  1.52
+ ],
+ "Turn right at the blue fountain.": [
+  "assets/voice/3e7a56d1b50a.mp3",
+  1.94
  ],
  "Turn right at the scarecrow.": [
   "assets/voice/2fe1a7c876ce.mp3",
   1.71
- ],
- "Turn right at the tree.": [
-  "assets/voice/075e1a8b6661.mp3",
-  1.42
  ],
  "Turn right at the well.": [
   "assets/voice/101a60411b2a.mp3",
@@ -649,17 +649,17 @@ window.MR_VOICE = {
   "assets/voice/2d8081ae6e09.mp3",
   1.18
  ],
- "Walk to the fountain.": [
-  "assets/voice/4621866cec74.mp3",
-  1.34
+ "Walk to the big tree.": [
+  "assets/voice/543a6d869257.mp3",
+  1.65
+ ],
+ "Walk to the blue fountain.": [
+  "assets/voice/cb916d06ea6b.mp3",
+  1.88
  ],
  "Walk to the scarecrow.": [
   "assets/voice/65897daf96f8.mp3",
   1.39
- ],
- "Walk to the tree.": [
-  "assets/voice/1b0816dc6c8e.mp3",
-  1.23
  ],
  "Walk to the well.": [
   "assets/voice/5be5f60fc8e1.mp3",

@@ -84,7 +84,8 @@
     '- {"type": "forward"} : go straight on',
     '- {"type": "forward", "steps": 3} : go forward that many steps (1 to 20)',
     '- {"type": "forward", "until": "fountain"} : go straight until that landmark. Landmarks: fountain, tree, bridge, red door, green door, door, windmill, scarecrow, well, bench, exit.',
-    '- {"type": "turn", "dir": "left"} or {"type": "turn", "dir": "right"}. Add "whose": "your" when the pupil says "your left / right" and "whose": "my" when the pupil says "my left / right".',
+    '- {"type": "turn", "dir": "left"} or {"type": "turn", "dir": "right"}. Add "whose": "your" when the pupil means Pip\'s own side ("your left", "Pip\'s left", "her left", "his left", "their left") and "whose": "my" when the pupil means the pupil\'s side ("my left"). With no such word, leave "whose" out.',
+    '- {"type": "turn", "dir": "around"} : turn around / turn back / go back (one half turn). Never use two left or two right turns for this, and never add "whose" to it.',
     '- {"type": "stop"}',
     '',
     'Rules:',
@@ -92,6 +93,7 @@
     '- Do not decide if a move is possible. The game checks walls and the exit.',
     '- If you are not sure what the pupil means, return "actions": [] and put ONE short clarifying question in "clarify".',
     '- "turn" with no direction: clarify "Left or right?". A landmark that is not in the list: clarify "I can\'t see a <that thing>. What can I see?".',
+    '- "pip_just_asked" is the question Pip asked last. If it is "My left or your left?" (or right), the pupil\'s answer is one turn in that direction with "whose".',
     '- Never invent actions, landmarks or routes. Never tell the pupil the way out.',
     '',
     'Output example (json):',
@@ -225,7 +227,7 @@
 
   /* ------------------------------------------------------------------ Guide */
   /**
-   * @param {{text:string, run?:{x:number,y:number,facing:string}, visible?:string[], ctx?:{expect?:string, pendingDir?:string}}} req
+   * @param {{text:string, run?:{x:number,y:number,facing:string}, visible?:string[], ctx?:{expect?:('dir'|'whose'), pendingDir?:('left'|'right')}}} req
    * @returns {Promise<{actions:Array, clarify:(string|null), clarifyKind:(null|'dir'|'landmark'|'oneword'|'unknown'),
    *        failed:boolean, reply?:string, source:('rules'|'ai')}>}
    *   actions non-empty => pass them to MR.guide.execute. actions empty => Pip says `clarify` (or `reply` when failed).
@@ -239,7 +241,11 @@
 
     var user = { instruction: text, landmarks_in_view: req.visible || [] };
     if (req.run) user.pip = { x: req.run.x, y: req.run.y, facing: req.run.facing };
-    if (req.ctx && req.ctx.expect) user.pip_just_asked = req.ctx.expect === 'whose' ? 'My left or your left?' : 'Left or right?';
+    /* the question Pip really asked: "My right or your right?" when the turn in question was a right turn */
+    if (req.ctx && req.ctx.expect) {
+      user.pip_just_asked = req.ctx.expect === 'whose'
+        ? MR.data.text.whose(req.ctx.pendingDir === 'right' ? 'right' : 'left') : MR.data.text.leftOrRight;
+    }
     return callModel(ai.GUIDE_SYSTEM, user).then(function (obj) {
       if (!obj) {
         if (fail()) return viaRules();
