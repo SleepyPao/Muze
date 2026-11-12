@@ -2,6 +2,9 @@
  * Only the FIRST choice at each junction counts for the teacher. A wrong path ends in a dead end:
  * "Dead end. Go back and ask Pip again." - Pip walks back to the junction and the pupil may ask Pip again.
  * Random clicking can never reach the thing: only the right branch of junction 2 leads to it.
+ * The thing is NOT drawn on the map (the pupil must use Pip's place sentence, not their eyes). At each junction the
+ * card marks the part of the sentence that matters there. At the hiding place three things lie together and the
+ * pupil picks Pip's with the other two facts on the card ("Which one is it?", MR.data.claimOptions).
  * Side panel: the fact card, the legend (MR.legend: the name of every landmark on the map; tap = it blinks) and a tip. */
 (function (root) {
   'use strict';
@@ -26,13 +29,13 @@
       rootEl.appendChild(el('div', { class: 'mr-go' }, [box, side]));
       card.focus('place');
 
-      scene = MR.render.createScene(box, mz, { item: { id: item.id, x: mz.item.x, y: mz.item.y, mystery: !named }, showExit: false,
+      scene = MR.render.createScene(box, mz, { item: { id: item.id, x: mz.item.x, y: mz.item.y, hidden: true }, showExit: false,
         label: named ? 'Maze for ' + item.name : 'Maze for thing ' + (idx + 1) });
       var sc = scene;
       /* the legend: the name of every landmark on this map (the words in the place sentence); tap = it blinks on the map */
       side.insertBefore(MR.legend.create(mz, sc, { compact: true }), side.lastChild);
       sc.setPip(mz.start.x, mz.start.y, mz.start.facing);
-      var walking = false, current = -1;
+      var walking = false, current = -1, offered = {};
 
       ui.dialog.show({ input: true, hint: false, emotion: 'happy', placeholder: 'Ask Pip again…' });
       ui.dialog.say('Help me find it! Click a path.', { emotion: 'happy' });
@@ -46,7 +49,11 @@
         var J = mz.junctions[j];
         sc.setHighlights(J.branches.map(function (b) { return { id: 'b' + b.option, tiles: b.path.slice(0, 2), color: '#ffd84a' }; }));
         sc.setMarkers(J.branches.map(function (b) { return { x: b.path[0].x, y: b.path[0].y, dir: MR.maze.facingBetween(J.at, b.path[0]) }; }));
-        tip.textContent = j === 0 ? 'Click a path to show Pip the way.' : 'One more! Click a path.';
+        tip.textContent = j === 0 ? 'Read the yellow words on the card. Then click a path.' : 'One more! Read the yellow words. Then click a path.';
+        card.focus('place');
+        card.markClue(item.junctions[j].clue);       /* which part of the sentence to read now - not which path */
+        if (j > 0 && !offered[j]) ui.dialog.say('Now read your card again. Which path?', { emotion: 'neutral' });
+        offered[j] = true;
         walking = false;
       }
 
@@ -65,10 +72,11 @@
         MR.log.goChoice({ item_id: item.id, junction_index: j, choice: b.option, choice_label: b.label, correct: b.correct, first: rec.first, first_choice_correct: rec.first_choice_correct });
         sc.setHighlights([]); sc.setMarkers([]);
         if (b.correct) {
-          ui.dialog.say(j === 0 ? 'Yes! This way.' : 'I can see it!', { emotion: 'happy' });
+          ui.dialog.say(j === 0 ? 'Yes! This way.' : 'I can see something!', { emotion: 'happy' });
+          card.markClue(null);
           sc.walk(b.path, { msPerTile: 190 }).then(function () {
             if (!live()) return;
-            if (j + 1 < mz.junctions.length) offer(j + 1); else pickup();
+            if (j + 1 < mz.junctions.length) offer(j + 1); else claim();
           });
           return;
         }
@@ -86,6 +94,38 @@
           offer(j);
           ui.dialog.focus();
         });
+      }
+
+      /* "Which one is it?": three things at the hiding place; the pupil picks Pip's with the other two card facts */
+      function claim() {
+        current = -1;
+        var options = MR.data.claimOptions(item), tries = 0;
+        if (!options.length) { pickup(); return; }
+        card.focus(null);
+        tip.textContent = 'Three things are here! Read your card. Which one is Pip’s?';
+        var row = el('div', { class: 'mr-claim__row' });
+        var panel = el('div', { class: 'mr-claim', attrs: { role: 'group', 'aria-label': 'Which one is it?' } }, [el('p', { class: 'mr-claim__title', text: 'Which one is it?' }), row]);
+        options.forEach(function (o, i) {
+          var c = el('canvas', { class: 'mr-claim__icon mr-claim__icon--' + o.size, width: 16, height: 16 });
+          var g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(MR.sprites.item(o.thing, o.colour), 0, 0);
+          var b = el('button', { class: 'mr-claim__opt', type: 'button', dataset: { key: o.key, correct: o.correct ? '1' : '0' },
+            attrs: { 'aria-label': 'Thing ' + (i + 1) } }, [el('span', { class: 'mr-claim__pic' }, c)].concat(o.tags.map(function (t) { return el('span', { class: 'mr-claim__tag', text: t }); })));
+          b.addEventListener('click', function () {
+            if (!live() || b.disabled || panel.dataset.done) return;
+            var first = tries === 0; tries++;
+            MR.log.event('go', 'claim', { item_id: item.id, input_mode: 'click', choice: i, differs: o.differs, correct: o.correct, first: first, first_choice_correct: first ? o.correct : undefined });
+            if (o.correct) {
+              panel.dataset.done = '1'; b.classList.add('is-right'); MR.audio.sfx('right');
+              MR.util.wait(MR.flags.fast ? 0 : 500).then(function () { if (panel.parentNode) panel.parentNode.removeChild(panel); if (live()) pickup(); });
+            } else {
+              b.disabled = true; b.classList.add('is-wrong'); MR.audio.sfx('wrong');
+              ui.dialog.say('No, that is not it. Look at your card.', { emotion: 'confused' });
+            }
+          });
+          row.appendChild(b);
+        });
+        box.appendChild(panel);
+        ui.dialog.say('Which one is it? Tap it.', { emotion: 'neutral' });
       }
 
       function pickup() {

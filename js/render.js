@@ -5,7 +5,8 @@
  * `image-rendering: pixelated`, so pixels stay crisp. One requestAnimationFrame loop per scene; destroy() stops it.
  *
  *   var sc = MR.render.createScene(containerEl, map, opts)
- *     opts: { item:{id,x,y}?, showExit:true, facingArrow:false, maxScale:5, fit:'contain', label:'' }
+ *     opts: { item:{id,x,y,hidden?}? (hidden: not drawn until pickupItem), solidLandmarks:false (true = landmarks may hide Pip),
+ *              showExit:true, facingArrow:false, maxScale:5, fit:'contain', label:'' }
  *   sc.setPip(x, y, facing)            place Pip at once (no animation)
  *   sc.pip()                           -> {x, y, facing}
  *   sc.walk(path, opts) -> Promise     path [{x,y}] of adjacent tiles (Pip's own tile not included); faces each step
@@ -182,7 +183,7 @@
     var start = map.start || { x: 0, y: 0, facing: 'S' };
     var pip = { x: start.x, y: start.y, facing: start.facing || 'S', walking: false, frame: 0, hidden: !map.start, bumpT: 0 };
     /* mystery:true = the pupil was not asked for the thing's name: it is a "?" parcel until Pip picks it up */
-    var item = opts.item ? { id: opts.item.id, x: opts.item.x, y: opts.item.y, visible: true, pop: 0, mystery: !!opts.item.mystery } : null;
+    var item = opts.item ? { id: opts.item.id, x: opts.item.x, y: opts.item.y, visible: !opts.item.hidden, pop: 0, mystery: !!opts.item.mystery } : null;
     var trail = [], highlights = [], markers = [], particles = [], emote = null, pings = [], labels = [];
     var clickFn = null, lmClickFn = null, alive = true, raf = 0, scale = 1, t0 = performance.now(), now = 0;
     var fast = function () { return !!(MR.flags && MR.flags.fast); };
@@ -190,11 +191,15 @@
     function resize() {
       var r = container.getBoundingClientRect();
       var max = opts.maxScale || 5;
-      var s = Math.floor(Math.min((r.width || W) / W, (r.height || H) / H));
-      if (!(s >= 1)) s = 1;
+      var fit = Math.min((r.width || W) / W, (r.height || H) / H);
+      /* whole numbers keep the pixels crisp; on small screens (fit < 3) quarter steps use the room much better,
+       * and below 1 the map simply shrinks to fit - it must never be wider than the screen */
+      var s = fit >= 3 ? Math.floor(fit) : Math.floor(fit * 4) / 4;
+      if (!(s > 0)) s = 1;
+      if (s < 0.5) s = Math.max(0.25, fit);
       scale = Math.min(max, s);
-      cv.style.width = (W * scale) + 'px';
-      cv.style.height = (H * scale) + 'px';
+      cv.style.width = Math.floor(W * scale) + 'px';
+      cv.style.height = Math.floor(H * scale) + 'px';
     }
     var onResize = function () { if (alive) { resize(); placeLabels(); } };
     root.addEventListener('resize', onResize);
@@ -468,7 +473,8 @@
         (map.landmarks || []).forEach(function (lm) {
           if (lm.y !== y) return;
           /* a landmark right in front of Pip (the tile below him) would cover him: draw it see-through */
-          var covers = !pip.hidden && lm.y === pipRow + 1 && Math.abs(lm.x - pip.x) < 0.6 && lm.type !== 'bridge';
+          /* (not in pictures with opts.solidLandmarks, e.g. the warm-up "behind" picture: there the landmark must hide him) */
+          var covers = !opts.solidLandmarks && !pip.hidden && lm.y === pipRow + 1 && Math.abs(lm.x - pip.x) < 0.6 && lm.type !== 'bridge';
           if (covers) g.globalAlpha = 0.4;
           drawEntitySprite(S.landmark(lm.type, lf, corridorOrient(map, lm.x, lm.y)), lm.x, lm.y);
           g.globalAlpha = 1;
@@ -477,7 +483,7 @@
         if (item && item.y === y) drawItem();
         if (pipRow === y) drawPipSprite();
       }
-      drawPipInFront(pipRow);       /* no landmark ever covers Pip */
+      if (!opts.solidLandmarks) drawPipInFront(pipRow);       /* no landmark ever covers Pip */
       drawFacingArrow();            /* after every row, so no hedge or landmark can hide where Pip is looking */
       drawPings();
       drawMarkers();
@@ -562,6 +568,7 @@
           if (!item) return Promise.resolve();
           if (MR.audio) MR.audio.sfx('pickup');
           item.mystery = false;                 /* now the pupil sees what it is */
+          item.visible = true;
           sc.burst(item.x, item.y, 18);
           return tween(650, function (k) { item.pop = Math.sin(k * Math.PI / 2); }).then(function () {
             return tween(250, function () {});

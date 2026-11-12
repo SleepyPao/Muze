@@ -71,6 +71,21 @@ ask for different facts and all six types appear in one game. A clear question a
 gets no fact (`off_card: true` in the log). Totals stay 3 facts per thing, 12 per pupil. Old logs with `look` still count.
 Plain "go straight" walks to the end of the corridor (engine 3; older log records replay with the junction stop).
 
+## Go stage: words, not eyes
+
+The thing is not drawn on the Go map (`item.hidden`), so only Pip's place sentence leads there. At each junction the
+fact card marks the clause of the sentence for that junction (`card.markClue(item.junctions[j].clue)`): which part to
+read, never which path. At the hiding place the pupil picks Pip's thing out of three (`MR.data.claimOptions(item)`):
+each wrong one differs from the right one in exactly one of the two non-place facts on the card (thing for name / why,
+colour, size, owner tag, "Lost ..." tag). Logged as `go` / `claim` records; `claims_first_correct` (0-4) in the aggregate.
+
+## Small screens
+
+`css/mobile.css` (loaded last): portrait phones stack map over cards and let the page scroll; short landscape screens
+put the map left, a scrolling column right and the dialog bar on one line. Scenes scale in quarter steps below 3x
+(`render.js resize`) and never exceed their box. `--app-h` follows `visualViewport` so the on-screen keyboard does not
+cover the input. `tests/e2e/fit.js` checks 11 screens x 7 sizes.
+
 ## Who decides what (spec §2.7, §6)
 
 * The model only **classifies** (Ask) or **parses** (Guide). It never decides right / wrong.
@@ -131,7 +146,7 @@ Other flags: `fast=1` (no typing effect, instant walking, no voice), `offline=1`
 ## Tests
 
 ```
-npm test             # 105 unit tests (Node: pure logic + relay)
-npm run test:e2e     # full playthrough in headless Chromium, network blocked (245 checks)
+npm test             # 107 unit tests (Node: pure logic + relay)
+npm run test:e2e     # full playthrough in headless Chromium, network blocked (279 checks)
 node tools/shot.js "?debug=go&item=1" out.png    # screenshot helper
 ```

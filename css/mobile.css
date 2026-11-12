@@ -1,0 +1,193 @@
+/* Maze Rescue - phones and small tablets, portrait AND landscape. Loaded last.
+ * Rules of thumb: no sideways scrolling ever; the page (main area) may scroll up/down; pupil text stays >= 18px
+ * (16px only for secondary labels); every button is at least 44px tall. */
+
+/* grid / flex children must be allowed to shrink, or long cards push the page wider than the screen */
+.mr-go, .mr-guide, .mr-ask, .mr-warm__body, .mr-review__grid { min-width: 0; }
+.mr-go > *, .mr-guide > *, .mr-ask > *, .mr-warm__body > *, .mr-go__side > *, .mr-guide__side > * { min-width: 0; }
+.mr-screen { overflow-x: hidden; }
+.mr-app { height: var(--app-h, 100dvh); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.mr-dialog { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+.mr-dialog__text, .mr-fact__text, .mr-hintbox { overflow-wrap: anywhere; }
+
+/* ============================================================ narrow screens (phones upright, small tablets) */
+@media (max-width: 700px) and (orientation: portrait), (max-width: 700px) and (min-height: 521px) {
+  :root { --speech-size: 19px; --gap: 10px; --topbar-h: 50px; }
+  .mr-screen { padding: 10px; }
+  .mr-screen--go, .mr-screen--guide { padding: 6px 8px; }
+
+  /* top bar: stage text, things, stars, sound. The class number and "Demo mode" move out of the way. */
+  .mr-topbar { padding: 4px 8px; gap: 6px; }
+  .mr-topbar__left { flex: 1 1 0; }
+  .mr-topbar__right { flex: 0 0 auto; gap: 6px; }
+  .mr-stage { font-size: 15px; }
+  .mr-slot { width: 34px; height: 34px; border-width: 2px; }
+  .mr-slot__icon { width: 24px; height: 24px; }
+  .mr-inventory { gap: 4px; }
+  .mr-chip, .mr-badge--demo { display: none; }
+  .mr-stars { font-size: 17px; padding: 3px 7px; }
+  .mr-iconbtn { width: 40px; height: 40px; }
+
+  /* dialog bar: small portrait, text, then the input on its own line and the buttons under it */
+  .mr-dialog { grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); }
+  .mr-dialog__portrait { width: 60px; height: 60px; align-self: start; border-width: 3px; }
+  .mr-dialog__portrait canvas { width: 54px; height: 54px; }
+  .mr-dialog__speech { min-height: 60px; padding: 6px 10px; gap: 6px; border-width: 3px; }
+  .mr-dialog__name { display: none; }
+  .mr-dialog__form { grid-column: 1 / -1; flex-wrap: wrap; gap: 6px; }
+  .mr-dialog__main { display: contents; }
+  .mr-dialog__actions { grid-column: 1 / -1; }
+  .mr-input { flex: 1 1 100%; font-size: 18px; padding: 9px 12px; border-width: 3px; }
+  .mr-dialog__form .mr-btn { flex: 1 1 0; min-width: 0; min-height: 46px; padding: 6px 8px; font-size: 18px; border-width: 3px; }
+  .mr-btn--mic { min-width: 0; }
+  .mr-btn--big { font-size: 20px; padding: 8px 16px; min-height: 50px; }
+
+  .mr-h1 { font-size: 38px; }
+  .mr-h2 { font-size: 24px; }
+  .mr-card { padding: 10px 12px; border-width: 3px; }
+  .mr-overlay__card { padding: 16px; }
+  .mr-overlay__title { font-size: 28px; }
+
+  /* map screens: the map on top (as wide as the screen), everything else under it; the page scrolls */
+  .mr-go, .mr-guide { display: flex; flex-direction: column; height: auto; gap: 10px; }
+  .mr-go__scene, .mr-guide__scene { width: 100%; aspect-ratio: 5 / 4; max-height: 62vh; flex: none; }
+  .mr-go__side, .mr-guide__side { display: flex; flex-direction: column; overflow: visible; }
+  .mr-guide__history { max-height: 150px; flex: none; }
+  .mr-fact { grid-template-columns: 92px minmax(0, 1fr); }
+  .mr-facts--compact .mr-fact { grid-template-columns: 84px minmax(0, 1fr); }
+  .mr-fact__label { font-size: 16px; padding: 6px; }
+  .mr-fact__text { font-size: 18px; }
+  .mr-fact__body { min-height: 50px; padding: 8px 10px; }
+  .mr-claim { width: 98%; bottom: 4px; padding: 6px 6px 10px; border-width: 3px; }
+  .mr-claim__title { font-size: 20px; }
+  .mr-claim__row { gap: 5px; }
+  .mr-claim__opt { min-height: 104px; border-width: 3px; padding: 4px 2px 6px; }
+  .mr-claim__pic { min-height: 64px; }
+  .mr-claim__icon--small { width: 40px; height: 40px; }
+  .mr-claim__icon--big { width: 64px; height: 64px; }
+  .mr-claim__tag { font-size: 16px; padding: 1px 5px; text-align: center; }
+
+  .mr-ask { height: auto; }
+  .mr-ask__go { flex-wrap: wrap; justify-content: stretch; }
+  .mr-ask__go .mr-btn { flex: 1 1 auto; }
+  .mr-ask__lock { flex: 1 1 100%; text-align: center; }
+
+  .mr-warm { height: auto; }
+  .mr-warm__scene { min-height: 0; aspect-ratio: 4 / 3; max-height: 50vh; }
+  .mr-warm__instr { font-size: 22px; }
+  .mr-warm__sentence { font-size: 23px; }
+  .mr-warm__opts .mr-btn { flex: 1 1 auto; }
+
+  .mr-start__picture { height: 170px; }
+  .mr-start__foot { position: static; align-self: flex-end; }
+  .mr-break__items { flex-wrap: wrap; justify-content: center; }
+  .mr-teach__btns { margin-left: 0; }
+  .mr-toast { top: 60px; max-width: 92vw; text-align: center; }
+}
+
+/* ============================================================ short screens (phones on their side) */
+@media (max-height: 520px) and (orientation: landscape) {
+  :root { --speech-size: 18px; --gap: 8px; --topbar-h: 42px; }
+  .mr-topbar { min-height: 42px; padding: 2px 10px; }
+  .mr-logo { display: none; }
+  .mr-slot { width: 32px; height: 32px; border-width: 2px; }
+  .mr-slot__icon { width: 24px; height: 24px; }
+  .mr-iconbtn { width: 36px; height: 36px; }
+  .mr-badge--demo { display: none; }
+  .mr-screen { padding: 6px 8px; }
+
+  /* dialog bar: ONE line - portrait, Pip's words and the input side by side */
+  .mr-dialog { grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 5px 10px calc(5px + env(safe-area-inset-bottom)); }
+  .mr-dialog__portrait { width: 52px; height: 52px; border-width: 3px; }
+  .mr-dialog__portrait canvas { width: 46px; height: 46px; }
+  .mr-dialog__main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 8px; align-items: center; }
+  .mr-dialog__speech { min-height: 46px; padding: 4px 10px; border-width: 3px; }
+  .mr-dialog__name { display: none; }
+  .mr-dialog__form { flex-wrap: nowrap; gap: 5px; }
+  .mr-dialog__form[hidden] + .mr-dialog__actions, .mr-dialog__main:has(.mr-dialog__form[hidden]) { grid-template-columns: minmax(0, 1fr) auto; }
+  .mr-input { font-size: 18px; padding: 7px 10px; border-width: 3px; }
+  .mr-dialog__form .mr-btn { min-height: 44px; padding: 4px 9px; font-size: 17px; border-width: 3px; min-width: 0; }
+  .mr-btn--mic { min-width: 0; }
+  .mr-btn--big { min-height: 46px; font-size: 19px; padding: 6px 14px; }
+
+  /* map screens: map on the left, a scrolling column on the right */
+  .mr-go, .mr-guide { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(220px, 1fr); grid-template-rows: minmax(0, 1fr); height: 100%; gap: 8px; }
+  .mr-go__scene, .mr-guide__scene { aspect-ratio: auto; max-height: none; height: 100%; width: auto; }
+  .mr-go__side, .mr-guide__side { display: flex; flex-direction: column; overflow-y: auto; min-height: 0; gap: 6px; }
+  .mr-card { padding: 6px 10px; border-width: 3px; }
+  .mr-card__title { font-size: 18px; margin-bottom: 4px; }
+  .mr-fact, .mr-facts--compact .mr-fact { grid-template-columns: 76px minmax(0, 1fr); }
+  .mr-fact__label { font-size: 16px; padding: 4px; }
+  .mr-fact__text, .mr-facts--compact .mr-fact__text { font-size: 18px; }
+  .mr-fact__body, .mr-facts--compact .mr-fact__body { min-height: 40px; padding: 4px 8px; }
+  .mr-guide__history { max-height: none; min-height: 90px; flex: none; }
+  .mr-claim { padding: 4px 6px 8px; border-width: 3px; bottom: 2px; }
+  .mr-claim__title { font-size: 18px; margin-bottom: 2px; }
+  .mr-claim__opt { min-height: 0; border-width: 3px; padding: 2px 2px 4px; }
+  .mr-claim__pic { min-height: 48px; }
+  .mr-claim__icon--small { width: 32px; height: 32px; }
+  .mr-claim__icon--big { width: 48px; height: 48px; }
+  .mr-claim__tag { font-size: 16px; padding: 0 5px; }
+
+  /* the other screens: side by side where it helps, and they may scroll */
+  .mr-warm { height: 100%; gap: 6px; }
+  .mr-warm__body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .mr-warm__scene { min-height: 0; aspect-ratio: auto; max-height: none; }
+  .mr-warm__card { overflow-y: auto; max-height: 100%; gap: 6px; }
+  .mr-warm__instr, .mr-warm__sentence { font-size: 21px; }
+  .mr-ask { grid-template-columns: 1fr; height: auto; }
+  .mr-ask__left { display: none; }
+  .mr-h1 { font-size: 30px; }
+  .mr-h2 { font-size: 22px; }
+  .mr-start { gap: 6px; }
+  .mr-start__picture { display: none; }
+  .mr-start__sub { font-size: 18px; }
+  .mr-overlay__card { padding: 10px 16px; gap: 4px; flex-direction: row; flex-wrap: wrap; justify-content: center; max-width: 560px; }
+  .mr-overlay__pip { width: 64px; height: 64px; }
+  .mr-overlay__title { font-size: 24px; width: auto; }
+  .mr-overlay__text { flex: 1 1 100%; font-size: 18px; }
+  .mr-break__pip { width: 64px; height: 64px; }
+  .mr-toast { top: 48px; }
+}
+
+/* fingers, not a mouse: no hover tricks, a little more room to tap */
+@media (pointer: coarse) {
+  .mr-legend__item, .mr-btn--small { min-height: 44px; }
+}
+
+/* the app is exactly as wide as the screen: one shrinkable column, and the top bar gives way (the stage text
+ * shortens with "…") instead of pushing the page wider */
+.mr-app { grid-template-columns: minmax(0, 1fr); width: 100%; max-width: 100vw; }
+.mr-topbar { min-width: 0; overflow: hidden; }
+.mr-topbar__left { min-width: 0; overflow: hidden; }
+.mr-stage { min-width: 0; }
+.mr-inventory, .mr-topbar__right { flex-shrink: 0; }
+@media (max-width: 700px) {
+  .mr-topbar__left { flex: 1 1 40px; }
+  .mr-topbar__right { flex: 0 0 auto; }
+}
+@media (max-width: 380px) { .mr-stage { display: none; } }
+
+/* short landscape screens: the sound button stays a full-size target; the map column gets more of the width */
+@media (max-height: 520px) and (orientation: landscape) {
+  .mr-topbar { min-height: 46px; }
+  .mr-iconbtn { width: 42px; height: 40px; }
+  .mr-go, .mr-guide { grid-template-columns: minmax(0, 1.5fr) minmax(200px, 1fr); }
+  .mr-screen--go, .mr-screen--guide { padding: 3px 6px; }
+  .mr-go__scene, .mr-guide__scene { border-width: 2px; }
+}
+@media (max-height: 400px) and (orientation: landscape) {
+  .mr-dialog__portrait { width: 46px; height: 46px; }
+  .mr-dialog__portrait canvas { width: 40px; height: 40px; }
+  .mr-dialog { padding-top: 3px; padding-bottom: calc(3px + env(safe-area-inset-bottom)); }
+  .mr-topbar { min-height: 44px; padding-top: 1px; padding-bottom: 1px; }
+}
+
+/* small phones on their side (e.g. 640 x 360): Pip's words get less room, the input row keeps all three buttons whole */
+@media (max-height: 520px) and (orientation: landscape) and (max-width: 720px) {
+  .mr-dialog__main { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr); gap: 6px; }
+  .mr-dialog__text { font-size: 18px; line-height: 1.2; }
+  .mr-input { min-width: 70px; padding: 6px 8px; }
+  .mr-dialog__form .mr-btn { flex: none; padding: 4px 7px; font-size: 16px; }
+  .mr-chip { display: none; }
+}

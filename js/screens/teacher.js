@@ -76,6 +76,7 @@
       if (e.rewrite_success === true) flags.push('rewrite ok');
       if (e.rewrite_success === false) flags.push('rewrite not ok');
       if (e.event === 'junction') flags.push(e.correct ? 'right path' : 'dead end', e.first ? 'first try' : 'retry');
+      if (e.event === 'claim') flags.push(e.correct ? 'right thing' : 'wrong thing (differs in ' + e.differs + ')', e.first ? 'first try' : 'retry');
       if (e.hit_wall) flags.push('wall');
       if (e.reached_exit) flags.push('exit');
       if (e.ai_failed) flags.push('AI failed (not counted)');
@@ -125,7 +126,7 @@
     if (!rows.length) { body.appendChild(el('p', { class: 'mr-card', text: 'No pupil data on this device yet. Pupils play first, or use “Import JSON” to add data from other devices.' })); return; }
     var t = el('table', { class: 'mr-teach__table' });
     var head = [
-      ['Class no.', ''], ['Facts asked', '/12'], ['Assisted', 'facts'], ['Paths first try', '/8'], ['Exits', '/2'],
+      ['Class no.', ''], ['Facts asked', '/12'], ['Assisted', 'facts'], ['Paths first try', '/8'], ['Right thing first try', '/4'], ['Exits', '/2'],
       ['Pip asked back', 'times'], ['Good rewrites', 'times'], ['A: Question form', '0–3'], ['C: Precision', '0–3'], ['C: Repair', '0–3'],
       ['Hints*', ''], ['Warm-up*', '/10'], ['Time*', ''], ['Tries*', 'paths / words'], ['', '']
     ];
@@ -136,7 +137,7 @@
       var tr = el('tr', { class: 'mr-teach__row', dataset: { classNo: r.class_no } }, [
         el('td', { class: 'mr-teach__cls', text: r.class_no }),
         el('td', { text: String(r.facts_asked) }), el('td', { text: String(r.facts_assisted) }),
-        el('td', { text: String(r.junctions_first_correct) }), el('td', { text: String(r.exits_reached) }),
+        el('td', { text: String(r.junctions_first_correct) }), el('td', { text: String(r.claims_first_correct) }), el('td', { text: String(r.exits_reached) }),
         el('td', { text: String(r.clarifications) }), el('td', { text: String(r.rewrites_ok) }),
         el('td', {}, sel(r.class_no, 'A_question_form', r.rubric.A_question_form)),
         el('td', {}, sel(r.class_no, 'C_precision', r.rubric.C_precision)),
@@ -162,7 +163,7 @@
     t.appendChild(tb);
     body.appendChild(el('div', { class: 'mr-teach__tablewrap' }, t));
     body.appendChild(el('p', { class: 'mr-teach__foot', text: '* For information only: hints, warm-up, time and tries are not part of the language score. ' +
-      'Rubric B = the automatic counts (facts asked, paths first try, exits, Pip asked back, good rewrites). Enter A and C here; they are saved on this device and in the exports.' }));
+      'Rubric B = the automatic counts (facts asked, paths first try, right thing first try, exits, Pip asked back, good rewrites). Enter A and C here; they are saved on this device and in the exports.' }));
   }
 
   function gate(rootEl) {

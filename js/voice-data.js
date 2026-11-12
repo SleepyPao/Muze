@@ -77,9 +77,9 @@ window.MR_VOICE = {
   "assets/voice/27b7ac32c7e7.mp3",
   1.86
  ],
- "I can see it!": [
-  "assets/voice/00e775aa2eae.mp3",
-  1.09
+ "I can see something!": [
+  "assets/voice/694bdfca459d.mp3",
+  1.47
  ],
  "I can’t see a bench. What can I see?": [
   "assets/voice/5acfa2bc5f6c.mp3",
@@ -597,6 +597,14 @@ window.MR_VOICE = {
   "assets/voice/8827791c09d0.mp3",
   1.47
  ],
+ "No, that is not it. Look at your card.": [
+  "assets/voice/67dcebc9bec2.mp3",
+  2.82
+ ],
+ "Now read your card again. Which path?": [
+  "assets/voice/780272df30d0.mp3",
+  2.61
+ ],
  "Now the other way out. Help me again!": [
   "assets/voice/3b15249d06fd.mp3",
   2.39
@@ -748,6 +756,10 @@ window.MR_VOICE = {
  "Walk to the windmill.": [
   "assets/voice/7d40e86bd41d.mp3",
   1.28
+ ],
+ "Which one is it? Tap it.": [
+  "assets/voice/f28f147cac95.mp3",
+  1.97
  ],
  "Which way? Click a path.": [
   "assets/voice/3fba30e96d2f.mp3",

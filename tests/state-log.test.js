@@ -216,7 +216,7 @@ test('log: rubric A and C (0-3), CSV export', () => {
   assert.equal(cells.length, MR.log.CSV_COLUMNS.length);
   assert.equal(cells[0], '5A-12');
   assert.deepEqual(cells.slice(1, 5), ['3', '1', '1', '1']);
-  assert.deepEqual(cells.slice(-3), ['2', '3', '0']);
+  assert.deepEqual(cells.slice(-4), ['2', '3', '0', '0']);   /* rubric A, C, C + right thing first try */
 });
 
 test('log: export, then import / merge on another device (idempotent)', () => {
@@ -290,4 +290,16 @@ test('a game saved when every card was name / look / place keeps working with th
   assert.equal(S.allFactsUnlocked(ids[1]), true);
   assert.equal(S.collectItem(ids[1]), true);
   assert.equal(S.allFactsUnlocked(ids[2]), false);
+});
+
+test('log: "Which one is it?" - only the first tap per thing counts', () => {
+  const MR = fresh();
+  MR.state.begin('5A-30', 'standard', { seed: 5 });
+  const ids = MR.data.items.map((i) => i.id);
+  MR.log.event('go', 'claim', { item_id: ids[0], choice: 1, correct: true, first: true });
+  MR.log.event('go', 'claim', { item_id: ids[1], choice: 0, correct: false, first: true });
+  MR.log.event('go', 'claim', { item_id: ids[1], choice: 2, correct: true, first: false });
+  const row = MR.log.aggregate()[0];
+  assert.equal(row.claims_first_correct, 1);
+  assert.equal(row.claim_attempts, 3);
 });

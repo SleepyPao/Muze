@@ -186,9 +186,10 @@
     });
     return order.sort().map(function (classNo) {
       var list = by[classNo].slice().sort(function (a, b) { return a.timestamp < b.timestamp ? -1 : (a.timestamp > b.timestamp ? 1 : 0); });
-      var facts = {}, assisted = {}, jFirst = {}, jDone = {}, exits = {};
+      var facts = {}, assisted = {}, jFirst = {}, jDone = {}, cFirst = {}, exits = {};
       var row = {
         class_no: classNo, facts_asked: 0, facts_assisted: 0, junctions_first_correct: 0, junctions_done: 0, exits_reached: 0,
+        claims_first_correct: 0, claim_attempts: 0,   /* "Which one is it?" at the hiding place: right thing on the first tap (0-4) */
         clarifications: 0, rewrites_ok: 0, hints_used: 0, ask_turns: 0, go_attempts: 0, guide_instructions: 0, wall_hits: 0,
         ai_failures: 0, off_card: 0, time_ms: 0, warmup_correct: null, warmup_total: null, grammar_notes: [], corrected_asr: 0,
         first_time: list.length ? list[0].timestamp : null, last_time: list.length ? list[list.length - 1].timestamp : null,
@@ -218,6 +219,9 @@
           var jk = e.item_id + '.' + e.junction_index;
           if (e.first && !(jk in jFirst)) jFirst[jk] = !!e.first_choice_correct;
           if (e.correct) jDone[jk] = true;
+        } else if (e.stage === 'go' && e.event === 'claim') {
+          row.claim_attempts++;
+          if (e.first && !(e.item_id in cFirst)) cFirst[e.item_id] = !!e.correct;
         } else if (e.stage === 'guide' && e.event === 'turn') {
           row.guide_instructions++;
           if (e.hit_wall) row.wall_hits++;
@@ -228,6 +232,7 @@
       row.facts_assisted = Object.keys(assisted).length;
       row.junctions_first_correct = Object.keys(jFirst).filter(function (k) { return jFirst[k]; }).length;
       row.junctions_done = Object.keys(jDone).length;
+      row.claims_first_correct = Object.keys(cFirst).filter(function (k) { return cFirst[k]; }).length;
       row.exits_reached = Object.keys(exits).length;
       return row;
     });
@@ -292,7 +297,7 @@
   /* ------------------------------------------------------------------ CSV */
   log.CSV_COLUMNS = ['class_no', 'facts_asked_of_12', 'facts_assisted', 'junctions_first_correct_of_8', 'exits_reached_of_2',
     'clarifications', 'rewrites_ok', 'hints_used', 'ask_turns', 'go_attempts', 'guide_instructions', 'wall_hits',
-    'time_min', 'warmup_correct', 'rubric_A_question_form', 'rubric_C_precision', 'rubric_C_repair'];
+    'time_min', 'warmup_correct', 'rubric_A_question_form', 'rubric_C_precision', 'rubric_C_repair', 'things_first_correct_of_4'];
   function cell(v) {
     if (v == null) return '';
     var s = String(v);
@@ -305,7 +310,7 @@
     log.aggregate().forEach(function (r) {
       lines.push([r.class_no, r.facts_asked, r.facts_assisted, r.junctions_first_correct, r.exits_reached,
         r.clarifications, r.rewrites_ok, r.hints_used, r.ask_turns, r.go_attempts, r.guide_instructions, r.wall_hits,
-        Math.round(r.time_ms / 6000) / 10, r.warmup_correct, r.rubric.A_question_form, r.rubric.C_precision, r.rubric.C_repair
+        Math.round(r.time_ms / 6000) / 10, r.warmup_correct, r.rubric.A_question_form, r.rubric.C_precision, r.rubric.C_repair, r.claims_first_correct
       ].map(cell).join(','));
     });
     return lines.join('\r\n') + '\r\n';

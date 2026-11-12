@@ -429,7 +429,7 @@ test('warm-up pictures: the "straight" path is two tiles long; "behind" / "in fr
   for (const kind of data.WARMUP_KINDS.prep.behind.concat(data.WARMUP_KINDS.prep['in front of'])) {
     for (let s = 0; s < 20; s++) {
       const q = data.warmupQuestion(kind, s), lm = q.map.landmarks[0], word = q.options[q.correct];
-      assert.equal(q.pip.facing, 'N', `${kind}: Pip looks away from the viewer`);
+      assert.equal(q.pip.facing, 'S', `${kind}: Pip looks at the viewer, like a photo`);
       /* behind = Pip is further up the screen AND the landmark is at his back; in front of = Pip is nearer the viewer
        * AND he looks at the landmark. Both ways of reading the picture give the same word. */
       assert.equal(word, lm.y > q.pip.y ? 'behind' : 'in front of', kind);
@@ -571,4 +571,31 @@ test('every fact of every game and every warm-up instruction is in the voice lin
   assert.ok(lines.has(data.text.offCard));
   for (const t of data.allWarmupInstructions()) assert.ok(lines.has(t), t);
   assert.ok(out.length < 400, `${out.length} lines to record`);
+});
+
+test('"Which one is it?": three things, exactly one right, each wrong one differs in exactly one card fact', () => {
+  for (let seed = 1; seed <= 300; seed++) {
+    data.useSession(seed);
+    for (const it of data.items) {
+      const extra = data.slotsOf(it).filter((f) => f !== 'place');
+      const opts = data.claimOptions(it);
+      assert.equal(opts.length, 3, `seed ${seed} ${it.id}`);
+      assert.equal(opts.filter((o) => o.correct).length, 1);
+      const right = opts.find((o) => o.correct);
+      assert.deepEqual([right.thing, right.colour, right.size, right.owner, right.when], [it.id, it.colour, it.size, it.owner, it.when]);
+      assert.deepEqual(opts.filter((o) => !o.correct).map((o) => o.differs).sort(), extra.slice().sort());
+      for (const o of opts.filter((x) => !x.correct)) {
+        const diff = ['thing', 'colour', 'size', 'owner', 'when'].filter((k) => o[k] !== right[k]);
+        assert.equal(diff.length, 1, `seed ${seed} ${it.id}: one difference only`);
+        const want = { name: 'thing', why: 'thing', colour: 'colour', size: 'size', whose: 'owner', when: 'when' }[o.differs];
+        assert.equal(diff[0], want);
+        if (o.differs === 'colour') assert.equal(data.coloursClash(o.colour, right.colour), false, 'colours a child can tell apart');
+      }
+      // what the pupil sees must tell the three apart: picture (thing, colour, size) + tags
+      const look = (o) => [o.thing, o.colour, o.size].concat(o.tags).join('|');
+      assert.equal(new Set(opts.map(look)).size, 3, `seed ${seed} ${it.id}: all three look different`);
+      assert.deepEqual(data.claimOptions(it), opts, 'same game -> same options');
+    }
+  }
+  data.useSession(null);
 });

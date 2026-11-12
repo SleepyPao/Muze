@@ -670,9 +670,9 @@
    *   Pip always walks AWAY from the viewer (facing N) here, so the pupil's left is Pip's left: a warm-up question can
    *   never depend on whose left is meant (Pip cannot ask back in the warm-up). That question belongs to Guide.
    * type 'prep': look at the picture (Pip + landmarks on `map`), pick the word for the gap in `sentence`.
-   *   Pictures are seen from the viewer: "behind" = further up the screen, "in front of" = further down.
-   *   In the "behind" and "in front of" pictures Pip looks AWAY from the viewer (facing N), so the word is the same
-   *   from the viewer's place and from Pip's own (behind: the landmark is at his back; in front of: he looks at it).
+   *   Pictures are seen from the viewer, and Pip always looks AT the viewer (facing S), like a photo:
+   *   "behind" = Pip stands further up the screen and the landmark (solid, never see-through here) hides his legs;
+   *   "in front of" = Pip stands nearer the viewer, in front of the landmark.
    *   `wrong` lists the words that are clearly false for the picture; two of them are offered with the right one. */
   function tUp(instruction, landmarks, correct) {
     return { type: 'path', instruction: instruction, map: wm(T_UP, landmarks, { x: 3, y: 3, facing: 'N' }),
@@ -730,19 +730,19 @@
     },
     behind_1: function (r) {
       var s = r.pick(LOW_TYPES);
-      return prep(r, 'behind', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 3, y: 2 }], { x: 3, y: 1, facing: 'N' }, ['in front of', 'between', 'opposite']);
+      return prep(r, 'behind', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 3, y: 2 }], { x: 3, y: 1, facing: 'S' }, ['in front of', 'between', 'opposite']);
     },
     behind_2: function (r) {
       var s = r.pick(LOW_TYPES);
-      return prep(r, 'behind', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 2, y: 3 }], { x: 2, y: 2, facing: 'N' }, ['in front of', 'between', 'opposite']);
+      return prep(r, 'behind', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 2, y: 3 }], { x: 2, y: 2, facing: 'S' }, ['in front of', 'between', 'opposite']);
     },
     in_front_1: function (r) {
       var s = r.pick(data.SOLID_TYPES);
-      return prep(r, 'in front of', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 3, y: 1 }], { x: 3, y: 2, facing: 'N' }, ['behind', 'between', 'opposite']);
+      return prep(r, 'in front of', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 3, y: 1 }], { x: 3, y: 2, facing: 'S' }, ['behind', 'between', 'opposite']);
     },
     in_front_2: function (r) {
       var s = r.pick(data.SOLID_TYPES);
-      return prep(r, 'in front of', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 4, y: 2 }], { x: 4, y: 3, facing: 'N' }, ['behind', 'between', 'opposite']);
+      return prep(r, 'in front of', 'Pip is ___ ' + lmName(s) + '.', LAWN, [{ type: s, x: 4, y: 2 }], { x: 4, y: 3, facing: 'S' }, ['behind', 'between', 'opposite']);
     },
     between: function (r) {
       var s = r.shuffle(data.SOLID_TYPES);
@@ -949,6 +949,41 @@
   /** True when the pupil is asked for this thing's name (otherwise it is a surprise until Pip picks it up). */
   data.nameIsSlot = function (itemOrId) { return data.slotsOf(itemOrId).indexOf('name') >= 0; };
   /** Colour name of a thing in this game (its icon is drawn in this colour). */
+  /**
+   * The "Which one is it?" step at the end of Go: three things lie at the hiding place and the pupil must pick Pip's,
+   * using the TWO facts on the card besides 'place'. One wrong thing differs only in the first of these facts, the
+   * other only in the second, so both facts are needed. Deterministic for a game (seed) and thing.
+   * @returns {Array<{key:string, thing:string, colour:string, size:string, owner:string, when:string,
+   *                  tags:string[], correct:boolean, differs:(string|null)}>}  three options in display order
+   */
+  data.claimOptions = function (itemOrId) {
+    var it = data.getItem(typeof itemOrId === 'object' ? itemOrId.id : itemOrId);
+    if (!it || !it.slots) return [];
+    var extra = it.slots.filter(function (f) { return f !== 'place'; });
+    var r = data.rng(((data.sessionSeed() || 1) ^ data.seedFromText('claim:' + it.id)) >>> 0);
+    var base = { thing: it.id, colour: it.colour, size: it.size, owner: it.owner, when: it.when };
+    var usedThings = [it.id];
+    function other(list, not) { return r.pick(list.filter(function (v) { return not.indexOf(v) < 0; })); }
+    function variant(kind) {
+      var v = { thing: base.thing, colour: base.colour, size: base.size, owner: base.owner, when: base.when };
+      if (kind === 'name' || kind === 'why') { v.thing = other(data.poolIds, usedThings); usedThings.push(v.thing); }
+      else if (kind === 'colour') v.colour = r.pick(data.COLOURS.filter(function (c) { return c !== base.colour && !coloursClash(c, base.colour); }));
+      else if (kind === 'size') v.size = base.size === 'big' ? 'small' : 'big';
+      else if (kind === 'whose') v.owner = other(data.OWNERS, [base.owner]);
+      else if (kind === 'when') v.when = other(data.WHENS, [base.when]);
+      v.differs = kind; v.correct = false;
+      return v;
+    }
+    base.differs = null; base.correct = true;
+    var list = r.shuffle([base].concat(extra.map(variant)));
+    list.forEach(function (o, i) {
+      o.key = 'c' + i;
+      o.tags = [];
+      if (extra.indexOf('whose') >= 0) o.tags.push(o.owner.charAt(0).toUpperCase() + o.owner.slice(1) + '’s');
+      if (extra.indexOf('when') >= 0) o.tags.push('Lost ' + o.when);
+    });
+    return list;
+  };
   data.itemColour = function (itemId) {
     var it = data.getItem(itemId);
     return it ? it.colour : null;

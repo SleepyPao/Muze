@@ -415,6 +415,19 @@
       var r = overlayResolve; MR.audio.sfx('click'); ui.overlay.hide(); if (r) r();
     });
     $('mr-mute').addEventListener('click', function () { MR.audio.toggleMute(); });
+    /* phones: when the on-screen keyboard opens, the app shrinks to the part of the screen that is still visible,
+     * so the input and Pip's words stay in view (iOS does not resize the page by itself) */
+    var vv = root.visualViewport;
+    var fitViewport = function () {
+      var h = vv ? vv.height : root.innerHeight;
+      doc.documentElement.style.setProperty('--app-h', Math.round(h) + 'px');
+      if (vv && vv.offsetTop) root.scrollTo(0, 0);
+      MR.emit('viewport:resize');
+    };
+    if (vv) { vv.addEventListener('resize', fitViewport); vv.addEventListener('scroll', fitViewport); }
+    root.addEventListener('orientationchange', function () { setTimeout(fitViewport, 250); });
+    root.addEventListener('resize', fitViewport);
+    fitViewport();
     /* browsers only allow sound after a user gesture */
     var unlock = function () { MR.audio.unlock(); doc.removeEventListener('pointerdown', unlock, true); };
     doc.addEventListener('pointerdown', unlock, true);

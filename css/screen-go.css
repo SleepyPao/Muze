@@ -15,3 +15,17 @@
   .mr-go__help { grid-area: help; }
 }
 @media (max-width: 640px) { .mr-go__side { display: flex; flex-direction: column; } }
+
+/* "Which one is it?" - three things at the hiding place */
+.mr-go__scene { position: relative; }
+.mr-claim { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); width: min(96%, 560px); background: var(--paper); border: 4px solid var(--ink); border-radius: 12px; box-shadow: 0 6px 0 var(--ink); padding: 8px 10px 12px; animation: mr-pop 0.3s ease-out; z-index: 5; }
+.mr-claim__title { margin: 0 0 6px; text-align: center; font-weight: 900; font-size: 22px; }
+.mr-claim__row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mr-claim__opt { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; min-height: 120px; padding: 6px 4px 8px; background: #fffbe0; border: 4px solid var(--ink); border-radius: 10px; box-shadow: 0 4px 0 var(--ink); font-weight: 800; color: var(--ink); }
+.mr-claim__opt:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+.mr-claim__pic { flex: 1; display: grid; place-items: center; min-height: 84px; }
+.mr-claim__icon--small { width: 48px; height: 48px; }
+.mr-claim__icon--big { width: 80px; height: 80px; }
+.mr-claim__tag { background: var(--ink); color: var(--cream); border-radius: 6px; padding: 1px 8px; font-size: 18px; line-height: 1.25; }
+.mr-claim__opt.is-wrong { background: #eee6d8; opacity: 0.55; animation: mr-shake 0.4s; }
+.mr-claim__opt.is-right { background: #d8f5d8; animation: mr-glow 0.6s ease-out; }

@@ -41,7 +41,7 @@
         var q = qs[idx];
         setDot(idx, 'is-now');
         card.appendChild(el('p', { class: 'mr-warm__count', text: 'Question ' + (idx + 1) + ' of ' + qs.length }));
-        scene = MR.render.createScene(box, q.map, { maxScale: 7, showExit: false, facingArrow: q.type === 'path', label: 'Warm-up picture' });
+        scene = MR.render.createScene(box, q.map, { maxScale: 7, showExit: false, facingArrow: q.type === 'path', solidLandmarks: q.type === 'prep', label: 'Warm-up picture' });
         if (q.type === 'path') showPath(q); else showPrep(q);
       }
 

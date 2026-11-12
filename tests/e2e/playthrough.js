@@ -145,7 +145,7 @@ async function playGame(page, classNo, difficulty, opts) {
   await page.click('#mr-warm-done');
 
   /* ---------- four things */
-  const items = await page.evaluate(() => MR.data.items.map((it) => ({ id: it.id, noun: it.noun, place: it.place, name: it.name, facts: it.facts })));
+  const items = await page.evaluate(() => MR.data.items.map((it) => ({ id: it.id, noun: it.noun, place: it.place, name: it.name, facts: it.facts, junctions: it.junctions.map((j) => ({ clue: j.clue })) })));
   const cards = [];
   for (let k = 0; k < items.length; k++) {
     const it = items[k];
@@ -205,10 +205,11 @@ async function playGame(page, classNo, difficulty, opts) {
     await page.waitForSelector('.mr-go');
     {
       const go = await page.evaluate(() => ({ title: document.querySelector('.mr-go .mr-card__title').textContent, side: document.querySelector('.mr-go__side').textContent,
-        label: document.querySelector('.mr-go canvas.mr-scene').getAttribute('aria-label'), mystery: MR.render.active[MR.render.active.length - 1].debugState().item.mystery }));
+        label: document.querySelector('.mr-go canvas.mr-scene').getAttribute('aria-label'), hidden: !MR.render.active[MR.render.active.length - 1].debugState().item.visible }));
       const named = new RegExp('\\b' + it.noun + '\\b', 'i');
-      if (hasName) ok(named.test(go.title) && !go.mystery, `[${it.id}] Go: the pupil asked for the name, so the card says "${go.title}"`);
-      else ok(!named.test(go.title + go.side + go.label) && go.mystery, `[${it.id}] Go: the name was not asked - the card ("${go.title}") and the map keep it a surprise`);
+      ok(go.hidden, `[${it.id}] Go: the thing is NOT drawn on the map - only Pip's words lead there`);
+      if (hasName) ok(named.test(go.title), `[${it.id}] Go: the pupil asked for the name, so the card says "${go.title}"`);
+      else ok(!named.test(go.title + go.side + go.label), `[${it.id}] Go: the name was not asked - the card ("${go.title}") and the map keep it a surprise`);
     }
     if (k === 0) { await waitHighlights(page); await checkLegend(page, 'Go map'); }
     const mz = await page.evaluate((id) => { const m = MR.data.goMap(id); return { junctions: m.junctions.map((j) => ({ branches: j.branches.map((b) => ({ path: b.path, correct: b.correct })) })) }; }, it.id);
@@ -219,15 +220,26 @@ async function playGame(page, classNo, difficulty, opts) {
         await clickTile(page, wrong.path[0].x, wrong.path[0].y);
         await waitSpeech(page, /Dead end/);
         ok(true, 'a wrong path -> "Dead end. Go back and ask Pip again."');
-        ok(await page.evaluate(() => MR.render.active[MR.render.active.length - 1].debugState().item.visible), 'the thing is still there after the dead end');
+        ok(!(await page.$('.mr-claim')) && (await page.$$eval('.mr-slot.is-filled', (e) => e.length)) === k, 'nothing to pick at the dead end');
         await waitHighlights(page);
         const again = await send(page, 'Where is it?');
         ok(again === it.place, 'the pupil can ask Pip again at the junction');
         await waitHighlights(page);
       }
+      const clue = await page.textContent('.mr-go .mr-fact__clue');
+      ok(clue === it.junctions[j].clue, `[${it.id}] junction ${j + 1}: the card marks "${clue}"`);
       const right = mz.junctions[j].branches.find((b) => b.correct);
       await clickTile(page, right.path[0].x, right.path[0].y);
     }
+    /* "Which one is it?" - three things, the other two card facts decide */
+    await page.waitForSelector('.mr-claim');
+    ok((await page.$$('.mr-claim__opt')).length === 3, `[${it.id}] three things at the hiding place`);
+    if (k === 1) {                                   /* thing 2: tap a wrong one first */
+      await page.click('.mr-claim__opt[data-correct="0"]');
+      await waitSpeech(page, /not it/);
+      ok(await page.isDisabled('.mr-claim__opt.is-wrong') && !(await page.isVisible('#mr-overlay')), 'a wrong thing: "No, that is not it." - nothing picked up, try again');
+    }
+    await page.click('.mr-claim__opt[data-correct="1"]');
     await page.waitForSelector('#mr-overlay:not([hidden])', { timeout: 8000 });
     ok(/You found it/.test(await page.textContent('#mr-overlay-title')), `[${it.id}] thing picked up, star given`);
     const found = await page.textContent('#mr-overlay-text');
@@ -428,9 +440,9 @@ async function playGame(page, classNo, difficulty, opts) {
   await page.waitForSelector('.mr-teach__table');
   const rows = await page.$$eval('.mr-teach__row', (trs) => trs.map((tr) => Array.from(tr.children).map((td) => td.textContent.trim())));
   ok(rows.length === 2 && rows[0][0] === '5A-12' && rows[1][0] === '5A-13', 'one row per pupil, evidence kept apart');
-  ok(rows[0][1] === '12' && rows[0][3] === '7' && rows[0][4] === '2', '5A-12: facts 12/12, paths first try 7/8 (one dead end), exits 2/2');
+  ok(rows[0][1] === '12' && rows[0][3] === '7' && rows[0][4] === '3' && rows[0][5] === '2', '5A-12: facts 12/12, paths first try 7/8 (one dead end), right thing first try 3/4, exits 2/2');
   ok(rows[0][2] === '1', '5A-12: one assisted fact (after the level-2 hint)');
-  ok(Number(rows[0][5]) >= 7 && Number(rows[0][6]) >= 1, '5A-12: clarifications and successful rewrites counted');
+  ok(Number(rows[0][6]) >= 7 && Number(rows[0][7]) >= 1, '5A-12: clarifications and successful rewrites counted');
   await page.selectOption('.mr-teach__row:first-child select[data-field="A_question_form"]', '2');
   await page.selectOption('.mr-teach__row:first-child select[data-field="C_precision"]', '3');
   await page.selectOption('.mr-teach__row:first-child select[data-field="C_repair"]', '1');
@@ -450,7 +462,7 @@ async function playGame(page, classNo, difficulty, opts) {
   ok(walk.r1 && walk.r2 && walk.n2 > walk.run2, `teacher replay of 5A-12 ends at both exits; all ${walk.n2} lines of route 2 are counted, the last run had ${walk.run2}`);
   let [dl] = await Promise.all([page.waitForEvent('download'), page.click('#mr-export-csv')]);
   const csv = fs.readFileSync(await dl.path(), 'utf8');
-  ok(/^﻿?class_no,/.test(csv) && /\n5A-12,12,1,7,2,/.test(csv) && /,2,3,1\r\n/.test(csv), 'class CSV export has the counts and rubric scores');
+  ok(/^﻿?class_no,/.test(csv) && /\n5A-12,12,1,7,2,/.test(csv) && /,2,3,1,3\r\n/.test(csv), 'class CSV export has the counts and rubric scores');
   [dl] = await Promise.all([page.waitForEvent('download'), page.click('#mr-export-json')]);
   const json = JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
   ok(json.app === 'maze-rescue' && json.entries.length > 50 && json.entries.every((e) => e.class_no && !('player' in e) && !('audio' in e)), 'JSON export: every record has class_no, no player field, no audio');

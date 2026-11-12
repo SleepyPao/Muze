@@ -19,7 +19,7 @@
   /** The fact card. @returns {{el, update(), flash(fact), focus(fact)}} */
   kit.factCard = function (item, opts) {
     opts = opts || {};
-    var slots = {}, kinds = MR.data.slotsOf(item);
+    var slots = {}, kinds = MR.data.slotsOf(item), clue = null, doc = root.document;
     var card = el('div', { class: 'mr-card mr-facts' + (opts.compact ? ' mr-facts--compact' : '') }, [
       el('h3', { class: 'mr-card__title', text: opts.title || 'What Pip told me' })
     ]);
@@ -39,7 +39,15 @@
         var on = !!(s && s.facts[f]), sl = slots[f];
         sl.el.classList.toggle('is-on', on);
         sl.el.classList.toggle('is-assisted', !!(s && s.assisted[f]));
-        sl.text.textContent = on ? MR.data.factText(item.id, f) : '? ? ?';
+        var full = on ? MR.data.factText(item.id, f) : '? ? ?';
+        var at = on && f === 'place' && clue ? full.indexOf(clue) : -1;
+        sl.text.textContent = '';
+        if (at < 0) sl.text.textContent = full;
+        else {                                   /* the part of the place sentence that matters at this junction */
+          sl.text.appendChild(doc.createTextNode(full.slice(0, at)));
+          sl.text.appendChild(el('mark', { class: 'mr-fact__clue', text: clue }));
+          sl.text.appendChild(doc.createTextNode(full.slice(at + clue.length)));
+        }
         var g = sl.icon.getContext('2d'); g.clearRect(0, 0, 16, 16);
         if (on && f === 'name') MR.render.drawItemIcon(sl.icon, item.id);
         sl.icon.hidden = !(on && f === 'name');
@@ -48,6 +56,8 @@
     update();
     return {
       el: card, update: update,
+      /** Go: mark the part of the place sentence for the junction Pip is at (null = no mark). It never says which path. */
+      markClue: function (text) { clue = text || null; update(); },
       /** The card shakes its locked slots: "Look at your card." */
       nudge: function () {
         kinds.forEach(function (k) {
