@@ -187,6 +187,10 @@
     if (a.type === 'forward') return 'forward' + (a.steps ? ' ' + a.steps : '') + (a.until ? ' to ' + MR.data.landmarkName(a.until) : '');
     return a.type;
   }
+  function aiLabel(m) { return m === 'offline' ? 'off (offline rules)' : 'on (DeepSeek' + (m === 'proxy' ? ', through the relay)' : ')'); }
+  function aiText() { var st = MR.ai.status(); return 'AI: ' + aiLabel(st.mode) + (st.lastHelp ? ' — last call: ' + st.lastHelp : ''); }
+  /* the start-up check of the web relay (MR.ai.probe) may finish after this page is drawn: keep the label true */
+  function showAi() { var t = root.document.getElementById('mr-teach-ai'); if (t) t.textContent = aiText(); }
   MR.screens.register('teacher', {
     mount: function (rootEl, params) {
       ui.topbar.setStage('Teacher view');
@@ -209,17 +213,19 @@
       }, 'small danger');
       var bBack = ui.button('Back to start', function () { MR.go('start'); }, 'small');
       var bLevels = ui.button('Levels (testing)', function () { MR.levels.show(); }, 'small');
+      var bAi = ui.button('Try AI again', function () { MR.ai.reset(); MR.ai.probe().then(function (m) { ui.toast('AI: ' + aiLabel(m)); showAi(); }); }, 'small');
       bLevels.id = 'mr-teacher-levels';
       bJson.id = 'mr-export-json'; bImp.id = 'mr-import-json'; bCsv.id = 'mr-export-csv'; bClear.id = 'mr-clear'; bBack.id = 'mr-teacher-back';
       rootEl.appendChild(el('div', { class: 'mr-teach' }, [
-        el('div', { class: 'mr-teach__bar' }, [el('h2', { class: 'mr-h2', text: 'Teacher view' }),
-          el('div', { class: 'mr-row mr-teach__btns' }, [bLevels, bJson, bImp, bCsv, bClear, bBack])]),
+        el('div', { class: 'mr-teach__bar' }, [el('h2', { class: 'mr-h2', text: 'Teacher view' }), el('span', { class: 'mr-teach__mode', id: 'mr-teach-ai', text: aiText() }),
+          el('div', { class: 'mr-row mr-teach__btns' }, [bLevels, bJson, bImp, bCsv, bAi, bClear, bBack])]),
         root.location.protocol === 'file:' ? el('p', { class: 'mr-teach__tip', text: 'Microphone tip: the game is open as a file, so Chrome asks for the microphone every time. ' +
           'Double-click start-mac.command (Mac) or start-windows.bat (Windows) instead: the game opens at http://localhost:8787/ and you can choose “Allow on every visit”.' }) : null,
         body
       ]));
       table(body);
+      MR.on('ai:mode', showAi);
     },
-    unmount: clearScenes
+    unmount: function () { MR.off('ai:mode', showAi); clearScenes(); }
   });
 })(typeof window !== 'undefined' ? window : globalThis);

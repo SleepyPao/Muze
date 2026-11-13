@@ -714,21 +714,48 @@ async function playGame(page, classNo, difficulty, opts) {
   ok(errorsL.length === 0, 'no page errors in the level select');
   await pl.close();
 
-  /* ---------- AI switched off: even with a key in the config, no model is ever called */
-  console.log('\n== AI switched off');
+  /* ---------- AI on: a model that fails, then a web relay that has no key */
+  console.log('\n== AI');
   const p2 = await context.newPage();
   const errors2 = [];
   p2.on('pageerror', (e) => errors2.push(e.message));
   await p2.addInitScript(() => { window.MR_CONFIG = { apiKey: 'test-not-a-real-key', baseUrl: 'https://ai.invalid', timeoutMs: 3000 }; });
   let calls = 0;
-  await p2.route('https://ai.invalid/**', (r) => { calls++; r.abort(); });
+  await p2.route('https://ai.invalid/**', (r) => {
+    calls++;
+    const content = calls === 1 ? '' : '{"category": "pla';
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content } }] }) });
+  });
   await p2.goto(URL + '?fast=1&debug=ask&item=1');
-  const s = await send(p2, 'Where is it?');
+  ok(await p2.evaluate(() => MR.ai.mode()) === 'direct' && !(await p2.$('#mr-demo')), 'with a key the AI is used (no badge for the pupil either way)');
+  let s = await send(p2, 'Where is it?');
+  ok(s === 'Sorry, can you say that again?' && (await factsOn(p2)).length === 0, 'empty AI content -> "Sorry, can you say that again?"');
+  ok(!(await p2.isDisabled('#mr-input')), 'the pupil can speak again (game not stuck)');
+  s = await send(p2, 'Where is it?');
   const place = await p2.evaluate(() => MR.data.items[1].place);
-  ok(calls === 0 && s === place && (await p2.evaluate(() => MR.ai.mode())) === 'offline', 'a key in the config does not turn the AI on: Pip answers from the rules, no model call');
-  await p2.goto(URL + '?debug=teacher');
-  ok(!/AI:|Try AI again/.test(await p2.textContent('.mr-teach__bar')), 'the teacher view shows nothing about AI');
-  ok(errors2.length === 0, 'no page errors with the AI switched off');
+  ok(calls === 2 && s === place, 'invalid JSON (2nd failure in a row) -> offline rules answer');
+  ok(await p2.evaluate(() => MR.ai.mode()) === 'offline', 'switched to the offline rules after two failures');
+  const failedTurn = await p2.evaluate(() => MR.log.all().find((e) => e.ai_failed));
+  ok(failedTurn && failedTurn.category === null && failedTurn.clarification === false, 'the failed turn is logged as an AI failure, not as a pupil error');
+  await p2.close();
+
+  const p4 = await context.newPage();
+  p4.on('pageerror', (e) => errors2.push(e.message));
+  await p4.addInitScript(() => { window.MR_CONFIG = { proxyUrl: 'https://relay.invalid/api/chat' }; });
+  let gets = 0, posts = 0;
+  await p4.route('https://relay.invalid/**', (r) => {
+    if (r.request().method() === 'GET') { gets++; return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true,"app":"maze-rescue","ai":false}' }); }
+    posts++; return r.abort();
+  });
+  await p4.goto(URL + '?fast=1&debug=ask&item=1');
+  await p4.waitForFunction(() => MR.ai.mode() === 'offline', null, { timeout: 6000 });
+  s = await send(p4, 'Where is it?');
+  ok(gets === 1 && posts === 0 && s === (await p4.evaluate(() => MR.data.items[1].place)), 'web relay without a key: asked once at start, then the offline rules answer at once (no "Sorry")');
+  await p4.goto(URL + '?debug=teacher');
+  await p4.waitForFunction(() => /AI: off/.test(document.getElementById('mr-teach-ai').textContent), null, { timeout: 6000 });
+  ok(true, 'the teacher view shows the AI is off: ' + (await p4.textContent('#mr-teach-ai')));
+  ok(errors2.length === 0, 'no page errors with the AI' + (errors2.length ? ': ' + errors2.join(' | ') : ''));
+  await p4.close();
 
   /* ---------- static checks */
   console.log('\n== code checks');

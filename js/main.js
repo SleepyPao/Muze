@@ -32,6 +32,7 @@
   MR.state.init();
   MR.ui.init();
   MR.levels.initTopbar();
+  MR.ai.probe();                       /* web version: is the AI relay there? (else the offline rules) */
 
   root.addEventListener('error', function (e) { if (root.console) root.console.error('[MR] error', e.message); });
 

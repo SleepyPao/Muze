@@ -19,7 +19,7 @@ class number (e.g. `5A-12`). There is no `player` field anywhere.
 | 5 | `js/guide-engine.js` | executes Guide actions, walls, exit, the left/right rule, `replay()` from logs | ✓ |
 | 6 | `js/state.js` | the pupil's session, saved per class number, resume, `nextScreen()` | ✓ |
 | 7 | `js/log.js` | append-only evidence log (spec §5.3), stage locks, aggregation, rubric, JSON/CSV | ✓ |
-| 8 | `js/ai.js` | the only place that could talk to a model (DeepSeek, OpenAI-compatible). **Switched off** (`ai.ENABLED = false`): every answer comes from the rules | ✓ |
+| 8 | `js/ai.js` | the only place that talks to a model (DeepSeek, OpenAI-compatible); falls back to rules. `ai.probe()` checks a remote relay once at start | ✓ |
 | 9 | `js/voice-data.js` | GENERATED: Pip's pre-recorded lines, text → `[mp3, seconds]` | – |
 | 10 | `js/speech.js` | speech recognition (input) and Pip's voice (output) | – |
 | 11 | `js/sprites.js` | all pixel art, drawn in code (Pip, items, landmarks, portraits) | – |
@@ -129,6 +129,13 @@ cover the input. `tests/e2e/fit.js` checks 11 screens x 7 sizes.
   `http://localhost:8787/` (server/proxy.js, bound to 127.0.0.1), where "Allow on every visit" is kept.
   The relay also reads `apiKey` from `config.local.js` on the server side, so the key never reaches the browser.
 
+## AI relays (the key never reaches a browser)
+
+* Web version (GitHub Pages): `config.public.js` (committed, no key) sets `proxyUrl` to the Cloudflare Worker in `cloud/`
+  (`cloud/worker.mjs`, key = Worker secret, CORS only for the game's sites, rate-limited). Only on `sleepypao.github.io`.
+* Classroom: `server/proxy.js` serves the game and generates `config.local.js` (`proxyUrl: '/api/chat'`) when it has a key.
+* A remote relay is asked once at start (`MR.ai.probe`, GET → `{ai:true|false}`); no relay / no key → offline rules from the first sentence.
+
 ## Debug deeplinks
 
 `index.html?debug=<screen>` jumps to a screen with a seeded pupil in memory storage (nothing saved):
@@ -149,7 +156,7 @@ Other flags: `fast=1` (no typing effect, instant walking, no voice), `offline=1`
 ## Tests
 
 ```
-npm test             # 109 unit tests (Node: pure logic + relay)
+npm test             # 116 unit tests (Node: pure logic + relay)
 npm run test:e2e     # full playthrough in headless Chromium, network blocked (~300 checks; the number varies a little with the random games)
 node tools/shot.js "?debug=go&item=1" out.png    # screenshot helper
 ```

@@ -27,10 +27,10 @@
   var failures = 0;          /* consecutive failed model calls */
   var forcedOffline = false; /* set after two consecutive failures */
   ai.MAX_FAILURES = 2;
-  /** Master switch. false = the game never calls a language model, whatever config.local.js or the relay says:
-   *  every answer comes from the offline rules (js/rules.js), and nothing about AI is shown. Set to true to use
-   *  DeepSeek again (config.local.js + server/proxy.js, see README). */
-  ai.ENABLED = false;
+  /** Master switch. false = the game never calls a language model, whatever the configuration says: every answer
+   *  comes from the offline rules (js/rules.js). true = use DeepSeek when a relay / key is configured
+   *  (web version: config.public.js -> cloud/ Worker; classroom: server/proxy.js; see README). */
+  ai.ENABLED = true;
   /** Tests may replace this with a fake fetch(url, init) -> Promise<{ok, json()}>. */
   ai._fetch = null;
 
@@ -60,6 +60,32 @@
   };
   /** Forget failures and try the model again (teacher action / tests). */
   ai.reset = function () { failures = 0; forcedOffline = false; MR.emit('ai:mode', ai.mode()); };
+  /**
+   * Once at start, for a relay on ANOTHER site (the web version's Cloudflare Worker): ask it whether it has a key.
+   * No answer, an error or {ai:false} -> the offline rules from the first sentence on (Pip never says "Sorry" for a
+   * relay that is not there). The classroom relay (same site, '/api/chat') only offers itself when it has a key.
+   * @returns {Promise<string>} the mode afterwards. Never rejects.
+   */
+  ai.probe = function () {
+    var c = ai.config(), f = ai._fetch || root.fetch;
+    if (ai.mode() !== 'proxy' || !/^https?:\/\//i.test(String(c.proxyUrl)) || typeof f !== 'function') return Promise.resolve(ai.mode());
+    var timer = null;
+    var timeout = new Promise(function (res) { timer = setTimeout(function () { res(null); }, 4000); });
+    var req;
+    try {
+      req = Promise.resolve(f.call(root, c.proxyUrl, { method: 'GET' }))
+        .then(function (r) { lastHttp = r ? (r.status || 0) : 0; return r && r.ok ? r.json() : null; })
+        .catch(function () { lastHttp = 0; return null; });
+    } catch (e) { req = Promise.resolve(null); }
+    return Promise.race([req, timeout]).then(function (j) {
+      clearTimeout(timer);
+      if (!j || j.ok !== true || !j.ai) {
+        if (!j && lastHttp == null) lastHttp = 0;
+        forcedOffline = true; MR.emit('ai:mode', 'offline');
+      }
+      return ai.mode();
+    });
+  };
 
   /* ------------------------------------------------------------------ prompts */
   ai.ASK_SYSTEM = [

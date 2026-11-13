@@ -80,11 +80,21 @@ Guide 阶段 Pip 面朝学生时，第一次说 left/right 会反问 "My left or
 按 **Speak** 后，按钮变成 **Stop**，旁边出现一个圆形倒计时，从 10 数到 0（最后 3 秒变红）。
 到 0 时自动停止；说完一句话后安静约 2 秒也会自动停止；随时可以按 Stop。听到的文字留在输入框里，学生检查后再按 Send。
 
-## AI（已关闭）
+## AI（DeepSeek）
 
-这一版**不调用任何 AI**：Pip 的回答全部来自离线规则（`js/rules.js`），不需要 API key，也不需要网络，界面上没有任何 AI 相关的内容。
-DeepSeek 的接入代码还保留在 `js/ai.js`（以及中转服务器 `server/proxy.js`），由一个总开关关掉：`js/ai.js` 里的 `ai.ENABLED = false`。
-以后要重新启用：把它改成 `true`，再按 `config.example.js` 开头的说明配置 key（key 只放在 git 忽略的 `config.local.js`，用 `start-mac.command` / `server/proxy.js` 中转，不要放进仓库或网页）。
+AI 只做一件事：**听懂学生的话**。Ask 阶段判断学生问的是哪一类事实（颜色、大小、在哪里……），Guide 阶段把学生的自由指令拆成动作。
+事实本身永远来自游戏里固定的事实表，AI 不会编造内容。离线关键词规则一直在下面兜底：没有 AI、AI 超时、返回空内容或坏格式时，
+Pip 说 "Sorry, can you say that again?"（不计入学生错误），连续失败两次自动改用离线规则，游戏不会卡住。
+
+key 只能放在服务器一侧，绝不放进网页或仓库：
+
+* **网页版（GitHub Pages）**：通过 Cloudflare Worker 中转，key 是 Cloudflare 上的加密 secret。部署步骤见 [cloud/README.md](cloud/README.md)，
+  部署后把地址填进 `config.public.js`。没填地址时网页版用离线规则。
+* **本机 / 全班（老师电脑）**：`cp config.example.js config.local.js`，填入 `apiKey`（这个文件已被 git 忽略），
+  然后双击 `start-mac.command`（或 `npm run serve`）。学生打开 `http://<老师电脑的 IP>:8787/`，key 只留在老师电脑上。
+
+老师视图顶部显示 AI 是否在用（"AI: on / off"），以及最近一次失败的原因；"Try AI again" 重新连接。
+总开关：`js/ai.js` 里的 `ai.ENABLED`（设成 `false` 则永远只用离线规则）。
 
 ## Pip 的声音（离线女声）
 
@@ -104,10 +114,10 @@ DeepSeek 的接入代码还保留在 `js/ai.js`（以及中转服务器 `server/
 ```bash
 npm install                 # 只安装开发用的 Playwright
 npx playwright install chromium
-npm test                    # 109 个单元测试（规则、迷宫、随机内容 360 个局号、提示、日志、AI 接口、语音输入、中转服务器）
+npm test                    # 116 个单元测试（规则、迷宫、随机内容 360 个局号、提示、日志、AI 接口、语音输入、中转服务器）
 npm run test:fit            # 13 个画面 × 7 种屏幕尺寸（手机横竖屏、平板、电脑）的排版检查
 npm run test:e2e            # 断网的无头浏览器完整通关，共约 300 项检查（随局号略有不同）：两名学生（内容不同）、两种难度、刷新后同一班号内容不变、
-                            # 只照第 2 级提示打字走完四条路线、赶火车倒计时（错过一班再重来）、图例、10 秒倒计时（模拟麦克风）、老师视图、AI 关闭时不发任何请求
+                            # 只照第 2 级提示打字走完四条路线、赶火车倒计时（错过一班再重来）、图例、10 秒倒计时（模拟麦克风）、老师视图、坏 AI、没有 key 的中转
 ```
 
 **选关（测试用）：** 老师视图里点 "Levels (testing)"，或直接打开 `index.html?levels=1`，可以跳到任意一关（热身、Ask/Go 1–4、两个迷宫、大学站两段、Review、老师视图）。跳关后顶栏有 "Levels" 和 "Skip ▶"（跳到下一关）。可选 Fast（无打字动画和语音）、同一局内容、20 秒短倒计时。测试局只存在内存里，不影响学生的存档。
@@ -128,10 +138,11 @@ npm run test:e2e            # 断网的无头浏览器完整通关，共约 300 
 | 每条日志带学生标记，证据分开 | ✅（单人版：按班号） | e2e：两名学生两行，JSON 每条记录有 class_no |
 | 断网时离线模式可完整走完四件物品和两条路线 | ✅ | e2e 全程屏蔽网络 |
 | 全程不需要键盘方向键 | ✅ | e2e 代码检查：无方向键处理 |
-| AI 已关闭：即使配置了 key 也不调用模型 | ✅ | e2e + 单元测试 |
+| AI 返回空内容或坏格式时不卡死，可以重说；中转不在时直接用离线规则 | ✅ | e2e 模拟空内容、坏 JSON、没有 key 的中转 |
+| 前端代码和仓库里搜不到 API key | ✅ | 单元测试检查 config.public.js、cloud/、index.html |
 | 前端代码和仓库里搜不到 API key | ✅ | key 只在 git 忽略的 config.local.js 或服务器环境变量 |
 
-AI 接入代码（已关闭）由单元测试用模拟响应覆盖，没有用真实 DeepSeek 接口测试过。
+未覆盖：没有用真实 DeepSeek 接口和真实 Cloudflare 部署测试过（中转和 AI 接口都用模拟响应测试）。
 
 ## 目录
 

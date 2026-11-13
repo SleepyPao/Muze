@@ -73,8 +73,10 @@
     <div id="mr-toast" class="mr-toast" hidden role="status"></div>
   </div>
 
-  <!-- Local configuration (git-ignored, optional). A missing file is fine: the game runs in Demo mode. -->
+  <!-- Configuration. config.public.js: the web version's AI relay address (no key). config.local.js: git-ignored,
+       optional, overrides it (a missing file is fine: Pip uses the offline rules). -->
   <script>window.MR_CONFIG = window.MR_CONFIG || null;</script>
+  <script src="config.public.js"></script>
   <script src="config.local.js" onerror="window.MR_CONFIG_MISSING = true"></script>
 
   <!-- 1. pure logic (also loaded by the Node tests) -->

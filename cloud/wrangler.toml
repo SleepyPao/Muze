@@ -1,0 +1,17 @@
+# Maze Rescue AI relay (Cloudflare Worker). Deploy steps: cloud/README.md
+# The DeepSeek key is NOT here: it is a secret (npx wrangler secret put DEEPSEEK_API_KEY).
+name = "muze-ai"
+main = "worker.mjs"
+compatibility_date = "2025-09-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://sleepypao.github.io,http://localhost:8787,http://127.0.0.1:8787"
+DEEPSEEK_MODEL = "deepseek-flash"
+
+# At most 30 AI requests per minute per address (one class of pupils typing is far below this).
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 30
+  period = 60

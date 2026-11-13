@@ -45,6 +45,37 @@ test('AI switched off (the shipped game): a key or a relay does not turn it on, 
   } finally { MR.ai.ENABLED = true; }
 });
 
+test('probe: the web version asks a relay on another site once; no relay / no key -> offline rules from the start', async () => {
+  const MR = fresh();
+  const answer = (obj, status) => async () => ({ ok: (status || 200) < 400, status: status || 200, json: async () => obj });
+  globalThis.MR_CONFIG = { proxyUrl: 'https://relay.example/api/chat' };
+  MR.ai._fetch = answer({ ok: true, app: 'maze-rescue', ai: true });
+  assert.equal(await MR.ai.probe(), 'proxy', 'relay with a key: the AI is used');
+  MR.ai.reset(); MR.ai._fetch = answer({ ok: true, app: 'maze-rescue', ai: false });
+  assert.equal(await MR.ai.probe(), 'offline', 'relay without a key');
+  MR.ai.reset(); MR.ai._fetch = answer(null, 404);
+  assert.equal(await MR.ai.probe(), 'offline', 'no relay at that address');
+  assert.match(MR.ai.status().lastHelp, /404/);
+  MR.ai.reset(); MR.ai._fetch = () => Promise.reject(new Error('network'));
+  assert.equal(await MR.ai.probe(), 'offline', 'network error');
+  /* the classroom relay (same site) and the direct mode are not probed */
+  let calls = 0;
+  MR.ai.reset(); MR.ai._fetch = () => { calls++; return Promise.reject(new Error('x')); };
+  globalThis.MR_CONFIG = { proxyUrl: '/api/chat' }; assert.equal(await MR.ai.probe(), 'proxy');
+  globalThis.MR_CONFIG = { apiKey: 'k' }; assert.equal(await MR.ai.probe(), 'direct');
+  assert.equal(calls, 0);
+});
+
+test('config.public.js turns the relay on only on the published site', () => {
+  const vm = require('vm'), fs = require('fs'), path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'config.public.js'), 'utf8').replace(/var RELAY = '[^']*'/, "var RELAY = 'https://relay.example/api/chat'");
+  const run = (hostname, pre) => { const w = { location: { hostname }, MR_CONFIG: pre || null }; vm.runInNewContext(src, { window: w }); return JSON.parse(JSON.stringify(w.MR_CONFIG)); };
+  assert.deepEqual(run('sleepypao.github.io'), { proxyUrl: 'https://relay.example/api/chat' });
+  assert.equal(run('localhost'), null, 'a local copy is not affected');
+  assert.equal(run(''), null, 'file:// is not affected');
+  assert.deepEqual(run('sleepypao.github.io', { offline: true }), { offline: true }, 'a config set before it wins');
+});
+
 test('mode: direct with a key, proxy with a proxyUrl, offline when forced', () => {
   const MR = fresh();
   globalThis.MR_CONFIG = { apiKey: 'k' }; assert.equal(MR.ai.mode(), 'direct');
