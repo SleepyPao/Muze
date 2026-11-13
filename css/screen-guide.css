@@ -33,3 +33,22 @@
   .mr-guide__side { display: flex; flex-direction: column; }
   .mr-guide__history { max-height: 160px; }
 }
+
+/* ---------- r4: the train clock, top-left on the map (the library is top-right) (js/screens/guide.js) ---------- */
+.mr-train {
+  position: absolute; top: 8px; left: 8px; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+  padding: 4px 10px 6px; border: 3px solid var(--ink); border-radius: 6px;
+  background: #1f2a3a; color: #ffd84a; box-shadow: var(--shadow);
+  pointer-events: none; font-variant-numeric: tabular-nums;
+}
+.mr-train__label { font-size: 11px; font-weight: 700; color: #cfe3ff; letter-spacing: 0.3px; }
+.mr-train__time { font-family: var(--font-round); font-size: 26px; font-weight: 900; line-height: 1.05; }
+.mr-train.is-low { background: #5a1c1c; }
+.mr-train.is-low .mr-train__time { color: #ffb0a0; animation: mr-train-pulse 1s steps(2) infinite; }
+@keyframes mr-train-pulse { 50% { opacity: 0.55; } }
+@media (max-width: 600px) {
+  .mr-train { top: 4px; left: 4px; padding: 2px 6px 4px; border-width: 2px; }
+  .mr-train__label { font-size: 10px; }
+  .mr-train__time { font-size: 20px; }
+}

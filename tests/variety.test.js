@@ -326,7 +326,7 @@ test(`fuzz ${SEEDS.length} seeds: Guide variants (mirrored / landmarks moved) ar
   assert.ok(mirrors.has(true) && mirrors.has(false), 'some mazes are mirrored, some are not');
   assert.ok(ids.size > 300, `${ids.size} different maze variants`);
   // ids that are not real mazes
-  for (const bad of ['', 'r4_standard', 'r1_hard', 'r1_standard~m2~p01234', 'r1_standard~m1~p0123', 'r1_standard~m1~p00123', 'r1_standard~m1~p91234', null]) {
+  for (const bad of ['', 'r9_standard', 'r1_hard', 'r1_standard~m2~p01234', 'r1_standard~m1~p0123', 'r1_standard~m1~p00123', 'r1_standard~m1~p91234', null]) {
     assert.equal(data.guideMazeById(bad), null, String(bad));
   }
   assert.equal(data.guideMazeById('r2_simple'), data.guideMazes.r2.simple);
@@ -391,7 +391,8 @@ test(`fuzz ${SEEDS.length} seeds: Pip is never hidden behind a landmark on ANY w
     for (let seed = 1000; seed < 1400; seed++) { data.useSession(seed); const mz = data.guideMaze(r, d); checkPipVisible(mz, mz.id); all++; }
   }
   data.useSession(null);
-  assert.ok(variants === SEEDS.length * 6 && all === 2400);
+  const maps = data.routeIds.length * data.DIFFICULTIES.length;
+  assert.ok(variants === SEEDS.length * maps && all === maps * 400);
 });
 
 test(`fuzz ${SEEDS.length} seeds: the four things of one game never have colours a child could mix up; no two landmarks of one map look alike`, () => {

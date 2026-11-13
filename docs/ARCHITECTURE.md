@@ -5,7 +5,7 @@ Plain HTML / CSS / JavaScript. No build step, no framework, no runtime dependenc
 loaded with classic `<script>` tags onto one global namespace, `window.MR`. Data lives in JS files,
 not JSON, because browsers block `fetch()` of local files.
 
-**Single player.** One pupil plays everything: 4 things + 2 routes. A pupil is identified only by a
+**Single player.** One pupil plays everything: 4 things + 4 routes (2 mazes, then University Station: to the library and back to the train). A pupil is identified only by a
 class number (e.g. `5A-12`). There is no `player` field anywhere.
 
 ## Files and load order
@@ -14,7 +14,7 @@ class number (e.g. `5A-12`). There is no `player` field anywhere.
 |---|------|--------------|:---:|
 | 1 | `js/core.js` | namespace, events (`MR.on/emit`), utils, `MR.storage` (localStorage with memory fallback) | ✓ |
 | 2 | `js/maze.js` | grid helpers: tiles, BFS, junctions, landmarks "at" / "ahead", `minInstructions` | ✓ |
-| 3 | `js/data.js` | the **closed** fact table, Go maps, Guide mazes (2 routes × standard/simple), warm-up, hints, every canned line | ✓ |
+| 3 | `js/data.js` | the **closed** fact table, Go maps, Guide maps (4 routes × standard/simple; r3/r4 = the fixed University Station street map, r4 timed: `TRAIN_SECONDS`), warm-up, hints, every canned line | ✓ |
 | 4 | `js/rules.js` | offline rules: Ask classifier + Guide parser (spec §8) | ✓ |
 | 5 | `js/guide-engine.js` | executes Guide actions, walls, exit, the left/right rule, `replay()` from logs | ✓ |
 | 6 | `js/state.js` | the pupil's session, saved per class number, resume, `nextScreen()` | ✓ |
@@ -138,6 +138,7 @@ cover the input. `tests/e2e/fit.js` checks 11 screens x 7 sizes.
 | `?debug=ask&item=2&facts=name,look` | Ask, third thing, two facts known |
 | `?debug=go&item=0` | Go for the key |
 | `?debug=guide&route=1&difficulty=simple` | Guide route 2, simple maze |
+| `?debug=guide&route=3&train=20` | University Station, back to the train, with a 20-second clock |
 | `?debug=review` / `?debug=teacher` | filled with example evidence for 3 pupils |
 
 Other flags: `fast=1` (no typing effect, instant walking, no voice), `offline=1` (force Demo mode),
@@ -147,6 +148,6 @@ Other flags: `fast=1` (no typing effect, instant walking, no voice), `offline=1`
 
 ```
 npm test             # 107 unit tests (Node: pure logic + relay)
-npm run test:e2e     # full playthrough in headless Chromium, network blocked (279 checks)
+npm run test:e2e     # full playthrough in headless Chromium, network blocked (~300 checks; the number varies a little with the random games)
 node tools/shot.js "?debug=go&item=1" out.png    # screenshot helper
 ```

@@ -99,7 +99,7 @@
       /* the maze this pupil really had (each game mirrors / re-arranges the mazes); rebuilt from the logged maze id */
       var mz = (r && MR.data.guideMazeById(r.mazeId)) || MR.data.guideMazes[rid].standard;
       var box = el('div', { class: 'mr-scene-box mr-teach__scene' });
-      var card = el('div', { class: 'mr-card mr-teach__replay' }, [el('h4', { class: 'mr-card__title', text: 'Route ' + (ri + 1) + (r ? (r.reached ? ' — exit reached' : ' — not finished') : ' — not started') }), box]);
+      var card = el('div', { class: 'mr-card mr-teach__replay' }, [el('h4', { class: 'mr-card__title', text: 'Route ' + (ri + 1) + (MR.data.guideMazes[rid].standard.noGate ? ' (' + MR.data.ROUTE_TITLES[rid] + ')' : '') + (r ? (r.reached ? ' — exit reached' : ' — not finished') : ' — not started') }), box]);
       replays.appendChild(card);
       var sc = MR.render.createScene(box, mz, { maxScale: 2, facingArrow: true, label: 'Route replay' });
       scenes.push(sc);
@@ -126,9 +126,9 @@
     if (!rows.length) { body.appendChild(el('p', { class: 'mr-card', text: 'No pupil data on this device yet. Pupils play first, or use “Import JSON” to add data from other devices.' })); return; }
     var t = el('table', { class: 'mr-teach__table' });
     var head = [
-      ['Class no.', ''], ['Facts asked', '/12'], ['Assisted', 'facts'], ['Paths first try', '/8'], ['Right thing first try', '/4'], ['Routes done', '/3'],
+      ['Class no.', ''], ['Facts asked', '/12'], ['Assisted', 'facts'], ['Paths first try', '/8'], ['Right thing first try', '/4'], ['Routes done', '/4'],
       ['Pip asked back', 'times'], ['Good rewrites', 'times'], ['A: Question form', '0–3'], ['C: Precision', '0–3'], ['C: Repair', '0–3'],
-      ['Hints*', ''], ['Warm-up*', '/10'], ['Time*', ''], ['Tries*', 'paths / words'], ['', '']
+      ['Hints*', ''], ['Warm-up*', '/10'], ['Trains missed*', ''], ['Time*', ''], ['Tries*', 'paths / words'], ['', '']
     ];
     t.appendChild(el('thead', {}, el('tr', {}, head.map(function (h) { return el('th', {}, [h[0], h[1] ? el('small', { text: ' ' + h[1] }) : null]); }))));
     var tb = el('tbody');
@@ -144,6 +144,7 @@
         el('td', {}, sel(r.class_no, 'C_repair', r.rubric.C_repair)),
         el('td', { class: 'mr-teach__info', text: String(r.hints_used) }),
         el('td', { class: 'mr-teach__info', text: r.warmup_correct == null ? '—' : String(r.warmup_correct) }),
+        el('td', { class: 'mr-teach__info', text: String(r.trains_missed) }),
         el('td', { class: 'mr-teach__info', text: mins(r.time_ms) }),
         el('td', { class: 'mr-teach__info', text: r.go_attempts + ' / ' + r.guide_instructions }),
         el('td', {}, openBtn)
@@ -162,7 +163,7 @@
     });
     t.appendChild(tb);
     body.appendChild(el('div', { class: 'mr-teach__tablewrap' }, t));
-    body.appendChild(el('p', { class: 'mr-teach__foot', text: '* For information only: hints, warm-up, time and tries are not part of the language score. ' +
+    body.appendChild(el('p', { class: 'mr-teach__foot', text: '* For information only: hints, warm-up, trains missed (the clock on the way back to University Station), time and tries are not part of the language score. ' +
       'Rubric B = the automatic counts (facts asked, paths first try, right thing first try, exits, Pip asked back, good rewrites). Enter A and C here; they are saved on this device and in the exports.' }));
   }
 

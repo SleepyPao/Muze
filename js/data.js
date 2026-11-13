@@ -504,11 +504,21 @@
 
   /* ------------------------------------------------------------------ Guide mazes: 2 routes x 2 difficulties */
   function gm(def) { def.kind = 'guide'; return maze.prepare(def); }
-  data.routeIds = ['r1', 'r2', 'r3'];
-  /** r3 is the real-world route: a simple street map near an MTR station. It is the same for every game
-   *  (`fixed`), drawn as streets and buildings (`theme: 'city'`), and Pip's goal is a real place (the library)
-   *  instead of the garden gate (`noGate`: the exit tile is the tile in front of the library). */
-  data.ROUTE_TITLES = { r1: 'Way out 1', r2: 'Way out 2', r3: 'University Station' };
+  data.routeIds = ['r1', 'r2', 'r3', 'r4'];
+  /** r3 + r4 are the last level, in a real place: a simple street map near University Station (MTR). Pip has an exam
+   *  today. r3: from the station to the library, to get the book "Cute Gordon". r4: back to the station before the
+   *  train leaves (`timed`: a clock runs while it is the pupil's turn; MR.data.trainSeconds).
+   *  Both are the same in every game (`fixed`), drawn as streets and buildings (`theme: 'city'`), and the goal is a
+   *  real place (`goal`) instead of the garden gate (`noGate`: the exit tile is the street in front of that place). */
+  data.ROUTE_TITLES = { r1: 'Way out 1', r2: 'Way out 2', r3: 'To the library', r4: 'Back to the station' };
+  data.BOOK_TITLE = 'Cute Gordon';
+  /** Seconds on the train clock (r4). They only count while it is the pupil's turn (not while Pip talks or walks,
+   *  or the AI thinks). Each missed train gives TRAIN_EXTRA more seconds for the next try. */
+  data.TRAIN_SECONDS = { standard: 240, simple: 300 };
+  data.TRAIN_EXTRA = 60;
+  data.trainSeconds = function (difficulty, tries) {
+    return (data.TRAIN_SECONDS[difficulty === 'simple' ? 'simple' : 'standard'] || 240) + data.TRAIN_EXTRA * (tries || 0);
+  };
   data.DIFFICULTIES = ['standard', 'simple'];
   data.guideMazes = {
     r1: {
@@ -609,7 +619,8 @@
    * "go straight" works, and "go straight until the bus stop" names the same corner in words. */
   var CITY_LANDMARKS = [
     { type: 'station', x: 1, y: 7 }, { type: 'shop', x: 3, y: 7 }, { type: 'bus_stop', x: 5, y: 4 }, { type: 'tree', x: 7, y: 4 },
-    { type: 'library', x: 13, y: 1 }
+    { type: 'library', x: 13, y: 1 }, { type: 'fountain', x: 11, y: 1 },  /* the fountain: what Pip sees first on the way back */
+    { type: 'bench', x: 10, y: 5 }                                          /* the corner below the library street */
   ];
   data.guideMazes.r3 = {
     standard: gm({
@@ -627,7 +638,7 @@
         '###############',
         '###############'
       ],
-      landmarks: CITY_LANDMARKS.concat([{ type: 'bench', x: 8, y: 7 }]),
+      landmarks: CITY_LANDMARKS.slice(),
       start: { x: 1, y: 8, facing: 'E' }, exit: { x: 13, y: 2 }
     }),
     simple: gm({
@@ -647,6 +658,22 @@
       ],
       landmarks: CITY_LANDMARKS.slice(),
       start: { x: 1, y: 8, facing: 'E' }, exit: { x: 13, y: 2 }
+    })
+  };
+  /* The way back: the same streets. Pip comes out of the library facing west; the goal is the street in front of
+   * the station, where Pip started r3. */
+  data.guideMazes.r4 = {
+    standard: gm({
+      id: 'r4_standard', routeId: 'r4', difficulty: 'standard', fixed: true, theme: 'city', noGate: true, goal: 'station', timed: true,
+      tiles: data.guideMazes.r3.standard.tiles.slice(),
+      landmarks: CITY_LANDMARKS.slice(),
+      start: { x: 13, y: 2, facing: 'W' }, exit: { x: 1, y: 8 }
+    }),
+    simple: gm({
+      id: 'r4_simple', routeId: 'r4', difficulty: 'simple', fixed: true, theme: 'city', noGate: true, goal: 'station', timed: true,
+      tiles: data.guideMazes.r3.simple.tiles.slice(),
+      landmarks: CITY_LANDMARKS.slice(),
+      start: { x: 13, y: 2, facing: 'W' }, exit: { x: 1, y: 8 }
     })
   };
 
@@ -894,8 +921,13 @@
     deadEnd: 'Dead end. Go back and ask Pip again.',
     gotItem: 'I got it! Thank you!',
     guideOpen: 'I can’t see the way out. Tell me where to go!',
-    cityOpen: 'Now I am at University Station. Please help me get to the library!',
-    cityGoal: 'I am at the library! Thank you!',
+    cityOpen: 'I have an exam today! But first I need a book from the library.',
+    cityBook: 'It is called Cute Gordon. Please help me get to the library!',
+    cityGoal: 'I am at the library. I found Cute Gordon!',
+    trainOpen: 'My train leaves soon! Please help me get back to the station. Quick!',
+    trainGoal: 'I am at the station! I can catch my train. Thank you!',
+    trainGone: 'Oh no! The train has gone.',
+    trainAgain: 'The next train comes soon. Help me again, quick!',
     wall: 'There is a wall.',
     leftOrRight: 'Left or right?',
     whose: function (dir) { return 'My ' + dir + ' or your ' + dir + '?'; },
@@ -951,7 +983,7 @@
       items.push(b.item); goMaps[p.id] = b.map;
     });
     var guide = {};
-    /* only the two mazes vary; the real-world route (r3) is fixed and uses no random numbers */
+    /* only the two mazes vary; the real-world routes (r3, r4) are fixed and use no random numbers */
     ['r1', 'r2'].forEach(function (rid) { guide[rid] = { mirror: r.bool(), perm: r.shuffle([0, 1, 2, 3, 4, 5]) }; });
     var content = { seed: seed, items: items, goMaps: goMaps, guide: guide, warmup: makeWarmup(r) };
     var keys = Object.keys(sessionCache);

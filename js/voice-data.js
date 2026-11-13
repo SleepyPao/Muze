@@ -65,9 +65,13 @@ window.MR_VOICE = {
   "assets/voice/2a724debd5b9.mp3",
   2.43
  ],
- "I am at the library! Thank you!": [
-  "assets/voice/4c9e84492ad3.mp3",
-  2.75
+ "I am at the library. I found Cute Gordon!": [
+  "assets/voice/da75a482cb61.mp3",
+  3.3
+ ],
+ "I am at the station! I can catch my train. Thank you!": [
+  "assets/voice/ba9b6215e1c5.mp3",
+  3.82
  ],
  "I am here already.": [
   "assets/voice/d9b6d4daec34.mp3",
@@ -156,6 +160,10 @@ window.MR_VOICE = {
  "I got it! Thank you!": [
   "assets/voice/89476d46c21d.mp3",
   1.74
+ ],
+ "I have an exam today! But first I need a book from the library.": [
+  "assets/voice/3a872f0a779a.mp3",
+  3.87
  ],
  "I lost it last night.": [
   "assets/voice/5f23b3127c3f.mp3",
@@ -413,6 +421,10 @@ window.MR_VOICE = {
   "assets/voice/adcdabc7a7ad.mp3",
   1.15
  ],
+ "It is called Cute Gordon. Please help me get to the library!": [
+  "assets/voice/1b0c20311bbd.mp3",
+  3.91
+ ],
  "It is green.": [
   "assets/voice/6b09a18e4e73.mp3",
   1.08
@@ -617,13 +629,13 @@ window.MR_VOICE = {
   "assets/voice/8827791c09d0.mp3",
   1.47
  ],
+ "My train leaves soon! Please help me get back to the station. Quick!": [
+  "assets/voice/5f1a05df4d0e.mp3",
+  4.53
+ ],
  "No, that is not it. Look at your card.": [
   "assets/voice/67dcebc9bec2.mp3",
   2.82
- ],
- "Now I am at University Station. Please help me get to the library!": [
-  "assets/voice/ffa0c9972513.mp3",
-  4.55
  ],
  "Now read your card again. Which path?": [
   "assets/voice/780272df30d0.mp3",
@@ -656,6 +668,10 @@ window.MR_VOICE = {
  "OK, I am back at the start.": [
   "assets/voice/6bb2fa47509b.mp3",
   2.17
+ ],
+ "Oh no! The train has gone.": [
+  "assets/voice/f833e0cdfb30.mp3",
+  2.35
  ],
  "Pip is lost in a big green maze!": [
   "assets/voice/be96ce573f90.mp3",
@@ -692,6 +708,10 @@ window.MR_VOICE = {
  "Take the path next to the well.": [
   "assets/voice/6119444a8e0d.mp3",
   1.85
+ ],
+ "The next train comes soon. Help me again, quick!": [
+  "assets/voice/e2650081edbd.mp3",
+  3.77
  ],
  "There is a wall.": [
   "assets/voice/316f26a3b8a9.mp3",

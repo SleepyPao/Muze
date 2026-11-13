@@ -30,7 +30,8 @@ INT4099 小组展示用的可运行原型。对象是香港小五、小六学生
 | Go × 4 | 每件物品 2 个岔路口，点击选路；走错到死路，可回岔路口重新问 Pip。右侧有地标图例 "What Pip can see" |
 | End of lesson 1 | 自动保存；下次输入同一班号从第 2 节继续 |
 | Guide × 2 | 看全图，用英语指挥 Pip；Pip 会反问 "Left or right?"、"My left or your left?" 等；撞墙不结束游戏。右侧有地标图例和两级提示 |
-| Review | 回看自己的提问记录和两条路线回放，填三条自评 |
+| 最后一关：University Station | 真实场景（港铁大学站附近的简化街道图）。Pip 今天要考试：先从车站走到 library 借书 *Cute Gordon*，再限时赶回大学站坐 MTR |
+| Review | 回看自己的提问记录和四条路线回放，填三条自评 |
 | Teacher view | Start 页右下角 "Teacher"：每位学生一行自动计数，录入评分表 A、C，展开看这名学生本局的四件物品、完整记录和路线回放，导出 / 导入 JSON，导出全班 CSV |
 
 同一台设备可以让多名学生先后各玩一局，证据按班号分开。多台设备的数据可在老师视图里用 "Import JSON" 合并。
@@ -42,6 +43,8 @@ INT4099 小组展示用的可运行原型。对象是香港小五、小六学生
 **手机和平板：** 横屏、竖屏都可以玩。竖屏时地图在上、卡片在下，页面可上下滚动；横屏时地图在左、卡片在右，对话栏压成一行。`npm run test:fit` 会在 7 种屏幕尺寸（360×640 到 1280×800）检查全部画面：没有横向滚动、没有被挤出屏幕或压扁的按钮。iPhone Safari 的语音输入和声音需要真机确认。
 
 **"Go straight" 规则：** 只说 "go straight" 时 Pip 会一直走到这条路的尽头，不在岔路口停。想让 Pip 中途停下，要说清楚停在哪里：`go straight until the well`、`go straight 2 steps`、`turn left at the well`。Pip 只能沿直线走，不会自己拐弯找路；要去不在正前方的地标，需要学生一步步指挥。
+
+**最后一关（大学站）：** 分两段。第一段从车站去 library，找到书 *Cute Gordon*。第二段从 library 赶回车站，地图右上角有倒计时 "Train leaves in 4:00"（Simple 难度 5:00）。倒计时只在轮到学生说话时走；Pip 说话、走路、等 AI、弹出卡片、切走页面时都暂停，所以网速和打字动画不扣时间。最后 30 秒变红闪烁。时间到了火车开走（"The train has gone!"），不算失败：Pip 回到 library 重来，每次多给 1 分钟。老师视图记录 "Trains missed"，CSV 多一列 trains_missed。回程时 Pip 往南走会面朝学生，所以会练到 "My left or your left?"。调试链接 `?debug=guide&route=3&train=20` 把倒计时设成 20 秒。
 
 **左右规则：** left / right 指 Pip 自己的左右。热身题里 Pip 总是背对学生走（学生的左 = Pip 的左），不会出现歧义。
 Guide 阶段 Pip 面朝学生时，第一次说 left/right 会反问 "My left or your left?"；Pip 记住学生的回答，这条路线里不再追问，也不会悄悄换成另一种理解。
@@ -120,9 +123,9 @@ DEEPSEEK_API_KEY=sk-... npm run serve      # 即 node server/proxy.js，零依�
 npm install                 # 只安装开发用的 Playwright
 npx playwright install chromium
 npm test                    # 107 个单元测试（规则、迷宫、随机内容 360 个局号、提示、日志、AI 接口、语音输入、中转服务器）
-npm run test:fit            # 11 个画面 × 7 种屏幕尺寸（手机横竖屏、平板、电脑）的排版检查
-npm run test:e2e            # 断网的无头浏览器完整通关，共 279 项检查：两名学生（内容不同）、两种难度、刷新后同一班号内容不变、
-                            # 只照第 2 级提示打字走出两条路线、图例、10 秒倒计时（模拟麦克风）、老师视图、坏 AI
+npm run test:fit            # 13 个画面 × 7 种屏幕尺寸（手机横竖屏、平板、电脑）的排版检查
+npm run test:e2e            # 断网的无头浏览器完整通关，共约 300 项检查（随局号略有不同）：两名学生（内容不同）、两种难度、刷新后同一班号内容不变、
+                            # 只照第 2 级提示打字走完四条路线、赶火车倒计时（错过一班再重来）、图例、10 秒倒计时（模拟麦克风）、老师视图、坏 AI
 ```
 
 截图：`node tools/shot.js "?debug=guide&route=1&seed=2024" out.png`（`&seed=` 指定局号，可重现同一局）。所有调试链接见 docs/ARCHITECTURE.md。

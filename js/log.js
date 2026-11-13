@@ -9,7 +9,7 @@
   var log = MR.log = {};
   var db = null;        /* { device_id, seq, entries:[], locks:{}, rubric:{} } */
 
-  log.TOTALS = { facts: 12, junctions: 8, exits: 3 };   /* exits: 2 maze routes + the University Station street map */   /* 4 things x 3 facts on each card */
+  log.TOTALS = { facts: 12, junctions: 8, exits: 4 };   /* exits: 2 maze routes + University Station (to the library, back to the train) */   /* 4 things x 3 facts on each card */
   log.LEGACY_FACT = 'look';         /* the old "size and colour" fact of logs written before the seven kinds */
   log.GAP_CAP_MS = 3 * 60 * 1000;   /* idle gaps longer than this are not counted as working time */
 
@@ -171,7 +171,7 @@
   /**
    * One row per pupil. All counts come from the log only.
    * @returns Array<{class_no, facts_asked (0-12), facts_assisted, junctions_first_correct (0-8), junctions_done,
-   *   exits_reached (0-2), clarifications, rewrites_ok, hints_used, ask_turns, off_card (questions about a kind of fact
+   *   exits_reached (0-4), trains_missed (r4: the clock ran out), clarifications, rewrites_ok, hints_used, ask_turns, off_card (questions about a kind of fact
    *   that was not on the card), go_attempts, guide_instructions,
    *   wall_hits, ai_failures, time_ms, warmup_correct (number|null), warmup_total (number|null), grammar_notes:[{item_id,sent_text,note}],
    *   corrected_asr, first_time, last_time, rubric:{A_question_form, C_precision, C_repair}}>
@@ -189,7 +189,7 @@
       var facts = {}, assisted = {}, jFirst = {}, jDone = {}, cFirst = {}, exits = {};
       var row = {
         class_no: classNo, facts_asked: 0, facts_assisted: 0, junctions_first_correct: 0, junctions_done: 0, exits_reached: 0,
-        claims_first_correct: 0, claim_attempts: 0,   /* "Which one is it?" at the hiding place: right thing on the first tap (0-4) */
+        claims_first_correct: 0, claim_attempts: 0, trains_missed: 0,   /* "Which one is it?" at the hiding place: right thing on the first tap (0-4) */
         clarifications: 0, rewrites_ok: 0, hints_used: 0, ask_turns: 0, go_attempts: 0, guide_instructions: 0, wall_hits: 0,
         ai_failures: 0, off_card: 0, time_ms: 0, warmup_correct: null, warmup_total: null, grammar_notes: [], corrected_asr: 0,
         first_time: list.length ? list[0].timestamp : null, last_time: list.length ? list[list.length - 1].timestamp : null,
@@ -202,6 +202,7 @@
         if (!isNaN(t)) prevT = t;
         if (e.ai_failed) row.ai_failures++;
         if (e.event === 'hint') { row.hints_used++; return; }
+        if (e.stage === 'guide' && e.event === 'restart' && e.reason === 'train_missed') { row.trains_missed++; return; }
         if (e.stage === 'warmup' && e.event === 'summary') { row.warmup_correct = e.correct; row.warmup_total = e.total; return; }
         if (e.event === 'turn' && e.input_mode === 'speech' && e.asr_text && e.asr_text !== e.sent_text) row.corrected_asr++;
         if (e.clarification && e.event === 'turn') row.clarifications++;
@@ -295,9 +296,9 @@
   };
 
   /* ------------------------------------------------------------------ CSV */
-  log.CSV_COLUMNS = ['class_no', 'facts_asked_of_12', 'facts_assisted', 'junctions_first_correct_of_8', 'exits_reached_of_3',
+  log.CSV_COLUMNS = ['class_no', 'facts_asked_of_12', 'facts_assisted', 'junctions_first_correct_of_8', 'exits_reached_of_4',
     'clarifications', 'rewrites_ok', 'hints_used', 'ask_turns', 'go_attempts', 'guide_instructions', 'wall_hits',
-    'time_min', 'warmup_correct', 'rubric_A_question_form', 'rubric_C_precision', 'rubric_C_repair', 'things_first_correct_of_4'];
+    'time_min', 'warmup_correct', 'rubric_A_question_form', 'rubric_C_precision', 'rubric_C_repair', 'things_first_correct_of_4', 'trains_missed'];
   function cell(v) {
     if (v == null) return '';
     var s = String(v);
@@ -310,7 +311,7 @@
     log.aggregate().forEach(function (r) {
       lines.push([r.class_no, r.facts_asked, r.facts_assisted, r.junctions_first_correct, r.exits_reached,
         r.clarifications, r.rewrites_ok, r.hints_used, r.ask_turns, r.go_attempts, r.guide_instructions, r.wall_hits,
-        Math.round(r.time_ms / 6000) / 10, r.warmup_correct, r.rubric.A_question_form, r.rubric.C_precision, r.rubric.C_repair, r.claims_first_correct
+        Math.round(r.time_ms / 6000) / 10, r.warmup_correct, r.rubric.A_question_form, r.rubric.C_precision, r.rubric.C_repair, r.claims_first_correct, r.trains_missed
       ].map(cell).join(','));
     });
     return lines.join('\r\n') + '\r\n';

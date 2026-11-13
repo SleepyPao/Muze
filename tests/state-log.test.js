@@ -42,9 +42,14 @@ test('state: flow Start -> Warm-up -> Ask/Go x4 -> break -> Guide x2 -> Review',
   S.finishRoute('r1', { instructions: 7, trail: [{ x: 1, y: 9 }] });
   assert.deepEqual(S.nextScreen(), { screen: 'guide', params: { route: 1 } });
   S.finishRoute('r2');
-  assert.deepEqual(S.nextScreen(), { screen: 'guide', params: { route: 2 } });   /* the real-world route */
+  assert.deepEqual(S.nextScreen(), { screen: 'guide', params: { route: 2 } });   /* University Station: to the library */
   S.finishRoute('r3');
-  assert.equal(S.get().stars, 7);
+  assert.deepEqual(S.nextScreen(), { screen: 'guide', params: { route: 3 } });   /* ... and back to the train */
+  assert.equal(S.trainClock('r4'), null);
+  S.setTrainClock('r4', 12.34, 1);
+  assert.deepEqual(S.trainClock('r4'), { left: 12.3, tries: 1 });
+  S.finishRoute('r4');
+  assert.equal(S.get().stars, 8);
   assert.equal(S.nextScreen().screen, 'review');
 });
 
@@ -201,7 +206,7 @@ test('log: per-pupil aggregation for the teacher view', () => {
   assert.equal(r.warmup_correct, 7);
   assert.equal(r.corrected_asr, 1);
   assert.equal(r.grammar_notes.length, 2);        // "single word" + "word order"
-  assert.deepEqual(MR.log.TOTALS, { facts: 12, junctions: 8, exits: 3 });
+  assert.deepEqual(MR.log.TOTALS, { facts: 12, junctions: 8, exits: 4 });
 });
 
 test('log: rubric A and C (0-3), CSV export', () => {
@@ -218,7 +223,7 @@ test('log: rubric A and C (0-3), CSV export', () => {
   assert.equal(cells.length, MR.log.CSV_COLUMNS.length);
   assert.equal(cells[0], '5A-12');
   assert.deepEqual(cells.slice(1, 5), ['3', '1', '1', '1']);
-  assert.deepEqual(cells.slice(-4), ['2', '3', '0', '0']);   /* rubric A, C, C + right thing first try */
+  assert.deepEqual(cells.slice(-5), ['2', '3', '0', '0', '0']);   /* rubric A, C, C + right thing first try + trains missed */
 });
 
 test('log: export, then import / merge on another device (idempotent)', () => {

@@ -8,9 +8,10 @@
  *     &item=0..3            ask / go: which thing (default 0)
  *     &facts=colour,place   ask: kinds of fact already unlocked, if they are on the thing's card (default none);
  *                           &facts=2 = the first 2 slots of the card, &facts=all = all three
- *     &route=0|1            guide: which route (default 0)
+ *     &route=0..3           guide: which route (default 0; 2 = to the library, 3 = back to the station)
  *     &difficulty=simple    guide / any: maze difficulty
  *     &seed=123             any: the game's content (things, maps, warm-up, maze variants); default random
+ *     &train=20             any: seconds on the train clock (route r4, back to University Station)
  *     &demo=1               review / teacher: fill the log with example evidence for three pupils
  *   ?memory=1               use volatile memory storage without seeding (tests)
  */
@@ -23,6 +24,7 @@
 
   if (q.get('offline') === '1') { root.MR_CONFIG = root.MR_CONFIG || {}; root.MR_CONFIG.offline = true; }
   if (MR.flags.debug || q.get('memory') === '1') MR.storage.useMemory();
+  if (Number(q.get('train')) > 0) MR.data.TRAIN_SECONDS = { standard: Number(q.get('train')), simple: Number(q.get('train')) };
 
   MR.log.init();
   MR.state.init();

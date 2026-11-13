@@ -44,7 +44,7 @@
       inventory: [],                     /* item ids in pick-up order */
       stars: 0,
       breakSeen: false,                  /* the "end of lesson 1" screen was shown */
-      guide: { routeIndex: 0, routes: routes },   /* routeIndex 0..1 in progress, 2 = both done */
+      guide: { routeIndex: 0, routes: routes },   /* routeIndex = the route in progress; routeIds.length = all done */
       review: { done: false, self: {} },
       startedAt: MR.util.nowISO(), updatedAt: MR.util.nowISO()
     };
@@ -54,6 +54,11 @@
    *  A thing already found keeps all its facts; an old 'look' counts for colour and size. */
   function migrate() {
     if (!cur || !cur.items) return;
+    /* a game saved before a route was added (e.g. r4, back to the station) gets that route, not finished yet */
+    if (cur.guide && cur.guide.routes) {
+      MR.data.routeIds.forEach(function (r) { if (!cur.guide.routes[r]) cur.guide.routes[r] = { reached: false, instructions: 0, trail: [] }; });
+      while (cur.guide.routeIndex > 0 && !cur.guide.routes[MR.data.routeIds[cur.guide.routeIndex - 1]].reached) cur.guide.routeIndex--;
+    }
     MR.data.items.forEach(function (it) {
       var st = cur.items[it.id]; if (!st) return;
       st.facts = st.facts || {}; st.assisted = st.assisted || {}; st.hintLevel = st.hintLevel || {};
@@ -234,6 +239,17 @@
     return true;
   };
   state.allRoutesDone = function () { return !!cur && cur.guide.routeIndex >= MR.data.routeIds.length; };
+  /** The train clock of a timed route (r4): {left: seconds, tries: missed trains} or null before it started. */
+  state.trainClock = function (routeId) {
+    var r = cur && cur.guide.routes[routeId];
+    return r && r.clock ? { left: r.clock.left, tries: r.clock.tries } : null;
+  };
+  /** Save the train clock. `quiet` = no 'state:change' event (the clock is saved every few seconds). */
+  state.setTrainClock = function (routeId, left, tries, quiet) {
+    var r = cur && cur.guide.routes[routeId]; if (!r) return;
+    r.clock = { left: Math.max(0, Math.round(left * 10) / 10), tries: tries | 0 };
+    if (quiet) state.save(); else changed();
+  };
 
   /* ---------- Review ---------- */
   state.finishReview = function (self) { if (cur) { cur.review = { done: true, self: self || {} }; changed(); } };

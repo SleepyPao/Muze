@@ -26,7 +26,7 @@
           items,
           el('p', { class: 'mr-break__stars', text: '★ ' + (s ? s.stars : 0) + ' stars' }),
           el('p', { class: 'mr-break__small', text: 'Your game is saved. Next time, type the same class number.' }),
-          el('p', { class: 'mr-break__text', text: 'In lesson 2 you help Pip get out of the maze. Then you help Pip in a real place: University Station.' }),
+          el('p', { class: 'mr-break__text', text: 'In lesson 2 you help Pip get out of the maze. Then you help Pip in a real place: University Station. Pip needs a book for an exam, and the train will not wait!' }),
           el('div', { class: 'mr-row mr-break__btns' }, [stop, goOn])
         ])
       ]));
