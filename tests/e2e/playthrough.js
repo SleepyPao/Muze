@@ -428,7 +428,7 @@ async function playGame(page, classNo, difficulty, opts) {
   page.on('dialog', (d) => d.accept());
 
   await page.goto(URL + '?fast=1');
-  ok(await page.isVisible('#mr-demo'), '"Demo mode" badge shown without a key');
+  ok(!(await page.$('#mr-demo')), 'no "Demo mode" / AI badge: the AI is switched off');
   await recordSaid(page);
 
   const g1 = await playGame(page, '5A-12', 'standard', { resume: true });
@@ -714,30 +714,21 @@ async function playGame(page, classNo, difficulty, opts) {
   ok(errorsL.length === 0, 'no page errors in the level select');
   await pl.close();
 
-  /* ---------- broken AI */
-  console.log('\n== broken AI');
+  /* ---------- AI switched off: even with a key in the config, no model is ever called */
+  console.log('\n== AI switched off');
   const p2 = await context.newPage();
   const errors2 = [];
   p2.on('pageerror', (e) => errors2.push(e.message));
   await p2.addInitScript(() => { window.MR_CONFIG = { apiKey: 'test-not-a-real-key', baseUrl: 'https://ai.invalid', timeoutMs: 3000 }; });
   let calls = 0;
-  await p2.route('https://ai.invalid/**', (r) => {
-    calls++;
-    const content = calls === 1 ? '' : '{"category": "pla';
-    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content } }] }) });
-  });
+  await p2.route('https://ai.invalid/**', (r) => { calls++; r.abort(); });
   await p2.goto(URL + '?fast=1&debug=ask&item=1');
-  ok(!(await p2.isVisible('#mr-demo')), 'with a key the game is not in Demo mode');
-  let s = await send(p2, 'Where is it?');
-  ok(s === 'Sorry, can you say that again?' && (await factsOn(p2)).length === 0, 'empty AI content -> "Sorry, can you say that again?"');
-  ok(!(await p2.isDisabled('#mr-input')), 'the pupil can speak again (game not stuck)');
-  s = await send(p2, 'Where is it?');
+  const s = await send(p2, 'Where is it?');
   const place = await p2.evaluate(() => MR.data.items[1].place);
-  ok(calls === 2 && s === place, 'invalid JSON (2nd failure in a row) -> offline rules answer');
-  ok(await p2.isVisible('#mr-demo'), 'switched to Demo mode after two failures');
-  const failedTurn = await p2.evaluate(() => MR.log.all().find((e) => e.ai_failed));
-  ok(failedTurn && failedTurn.category === null && failedTurn.clarification === false, 'the failed turn is logged as an AI failure, not as a pupil error');
-  ok(errors2.length === 0, 'no page errors with the broken AI');
+  ok(calls === 0 && s === place && (await p2.evaluate(() => MR.ai.mode())) === 'offline', 'a key in the config does not turn the AI on: Pip answers from the rules, no model call');
+  await p2.goto(URL + '?debug=teacher');
+  ok(!/AI:|Try AI again/.test(await p2.textContent('.mr-teach__bar')), 'the teacher view shows nothing about AI');
+  ok(errors2.length === 0, 'no page errors with the AI switched off');
 
   /* ---------- static checks */
   console.log('\n== code checks');

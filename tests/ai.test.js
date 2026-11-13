@@ -1,7 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { fresh } = require('./helper');
+const { MR: MR0, fresh } = require('./helper');
+/* The game ships with the AI switched off (MR.ai.ENABLED = false); these tests check the dormant AI code. */
+MR0.ai.ENABLED = true;
 
 /** A fake fetch that answers with the queued model outputs (string = message content, null = HTTP 500, 'HANG' = never). */
 function fakeFetch(queue, calls) {
@@ -29,6 +31,18 @@ test('no key -> offline "Demo mode", answers come from the rules', async () => {
   assert.deepEqual([r.category, r.fact_given, r.failed, r.source], ['place', 'place', false, 'rules']);
   const g = await MR.ai.guide({ text: 'turn' });
   assert.deepEqual([g.actions.length, g.clarify, g.source], [0, 'Left or right?', 'rules']);
+});
+
+test('AI switched off (the shipped game): a key or a relay does not turn it on, no model is called', async () => {
+  const MR = fresh(), calls = [];
+  MR.ai.ENABLED = false;
+  try {
+    globalThis.MR_CONFIG = { apiKey: 'k' }; assert.equal(MR.ai.mode(), 'offline');
+    globalThis.MR_CONFIG = { proxyUrl: '/api/chat' }; assert.equal(MR.ai.mode(), 'offline');
+    MR.ai._fetch = fakeFetch(['{"category":"place"}'], calls);
+    const r = await MR.ai.ask({ item: 'key', given: [], text: 'Where is it?' });
+    assert.deepEqual([r.category, r.source, calls.length], ['place', 'rules', 0]);
+  } finally { MR.ai.ENABLED = true; }
 });
 
 test('mode: direct with a key, proxy with a proxyUrl, offline when forced', () => {

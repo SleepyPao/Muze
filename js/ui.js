@@ -139,7 +139,6 @@
       $('mr-stars-n').textContent = s ? s.stars : 0;
       var chip = $('mr-classno');
       chip.hidden = !s; chip.textContent = s ? s.class_no : '';
-      $('mr-demo').hidden = !MR.ai.isOffline();
       var muted = MR.audio.isMuted();
       $('mr-mute').setAttribute('aria-pressed', muted ? 'true' : 'false');
       $('mr-mute').classList.toggle('is-muted', muted);

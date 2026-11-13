@@ -19,7 +19,7 @@ class number (e.g. `5A-12`). There is no `player` field anywhere.
 | 5 | `js/guide-engine.js` | executes Guide actions, walls, exit, the left/right rule, `replay()` from logs | ✓ |
 | 6 | `js/state.js` | the pupil's session, saved per class number, resume, `nextScreen()` | ✓ |
 | 7 | `js/log.js` | append-only evidence log (spec §5.3), stage locks, aggregation, rubric, JSON/CSV | ✓ |
-| 8 | `js/ai.js` | the only place that talks to a model (DeepSeek, OpenAI-compatible); falls back to rules | ✓ |
+| 8 | `js/ai.js` | the only place that could talk to a model (DeepSeek, OpenAI-compatible). **Switched off** (`ai.ENABLED = false`): every answer comes from the rules | ✓ |
 | 9 | `js/voice-data.js` | GENERATED: Pip's pre-recorded lines, text → `[mp3, seconds]` | – |
 | 10 | `js/speech.js` | speech recognition (input) and Pip's voice (output) | – |
 | 11 | `js/sprites.js` | all pixel art, drawn in code (Pip, items, landmarks, portraits) | – |
@@ -149,7 +149,7 @@ Other flags: `fast=1` (no typing effect, instant walking, no voice), `offline=1`
 ## Tests
 
 ```
-npm test             # 107 unit tests (Node: pure logic + relay)
+npm test             # 109 unit tests (Node: pure logic + relay)
 npm run test:e2e     # full playthrough in headless Chromium, network blocked (~300 checks; the number varies a little with the random games)
 node tools/shot.js "?debug=go&item=1" out.png    # screenshot helper
 ```

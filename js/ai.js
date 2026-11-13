@@ -27,6 +27,10 @@
   var failures = 0;          /* consecutive failed model calls */
   var forcedOffline = false; /* set after two consecutive failures */
   ai.MAX_FAILURES = 2;
+  /** Master switch. false = the game never calls a language model, whatever config.local.js or the relay says:
+   *  every answer comes from the offline rules (js/rules.js), and nothing about AI is shown. Set to true to use
+   *  DeepSeek again (config.local.js + server/proxy.js, see README). */
+  ai.ENABLED = false;
   /** Tests may replace this with a fake fetch(url, init) -> Promise<{ok, json()}>. */
   ai._fetch = null;
 
@@ -40,7 +44,7 @@
   /** 'offline' (Demo mode: keyword rules) | 'direct' (browser -> DeepSeek with a local key) | 'proxy' (browser -> server/proxy.js). */
   ai.mode = function () {
     var c = ai.config();
-    if (forcedOffline || c.offline) return 'offline';
+    if (!ai.ENABLED || forcedOffline || c.offline) return 'offline';
     if (c.proxyUrl) return 'proxy';
     if (c.apiKey) return 'direct';
     return 'offline';

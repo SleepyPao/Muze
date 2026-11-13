@@ -1,5 +1,8 @@
 /* Maze Rescue - local configuration TEMPLATE.
  *
+ * NOTE: the AI is switched off in this version (js/ai.js: ai.ENABLED = false), so apiKey / proxyUrl below are
+ * ignored until you set it to true. The speech options at the end still work.
+ *
  * To use the AI on ONE device (prototype / teacher's laptop):
  *   1. Copy this file to  config.local.js  (same folder as index.html). That file is git-ignored.
  *   2. Put your DeepSeek API key in apiKey below.

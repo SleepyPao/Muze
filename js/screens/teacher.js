@@ -203,7 +203,6 @@
         });
       }, 'small');
       var bCsv = ui.button('Export class CSV', function () { ui.download(file('class') + '.csv', '﻿' + MR.log.toCSV(), 'text/csv'); }, 'small');
-      var bAi = ui.button('Try AI again', function () { MR.ai.reset(); ui.toast('AI mode: ' + MR.ai.mode()); }, 'small');
       var bClear = ui.button('Delete all data', function () {
         if (!root.confirm('Delete ALL pupil records, scores and saved games on this device? Export first if you need them.')) return;
         MR.log.clear(); MR.state.resetAll(); table(body); ui.toast('All data deleted.');
@@ -213,8 +212,8 @@
       bLevels.id = 'mr-teacher-levels';
       bJson.id = 'mr-export-json'; bImp.id = 'mr-import-json'; bCsv.id = 'mr-export-csv'; bClear.id = 'mr-clear'; bBack.id = 'mr-teacher-back';
       rootEl.appendChild(el('div', { class: 'mr-teach' }, [
-        el('div', { class: 'mr-teach__bar' }, [el('h2', { class: 'mr-h2', text: 'Teacher view' }), el('span', { class: 'mr-teach__mode', text: 'AI: ' + MR.ai.mode() + (MR.ai.status().lastHelp ? ' — last call: ' + MR.ai.status().lastHelp : '') }),
-          el('div', { class: 'mr-row mr-teach__btns' }, [bLevels, bJson, bImp, bCsv, bAi, bClear, bBack])]),
+        el('div', { class: 'mr-teach__bar' }, [el('h2', { class: 'mr-h2', text: 'Teacher view' }),
+          el('div', { class: 'mr-row mr-teach__btns' }, [bLevels, bJson, bImp, bCsv, bClear, bBack])]),
         root.location.protocol === 'file:' ? el('p', { class: 'mr-teach__tip', text: 'Microphone tip: the game is open as a file, so Chrome asks for the microphone every time. ' +
           'Double-click start-mac.command (Mac) or start-windows.bat (Windows) instead: the game opens at http://localhost:8787/ and you can choose “Allow on every visit”.' }) : null,
         body

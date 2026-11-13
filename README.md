@@ -11,12 +11,10 @@ INT4099 小组展示用的可运行原型。对象是香港小五、小六学生
 **方式一（推荐，要用麦克风时）：双击 `start-mac.command`（Mac）或 `start-windows.bat`（Windows）。**
 游戏会在浏览器打开 `http://localhost:8787/`。第一次按 Speak 时 Chrome 询问麦克风，选"始终允许 / 在每次访问时允许"，以后不会再问。
 需要电脑装有 Node.js（没有 Node.js 时会尝试用 Python；都没有则提示）。Mac 第一次打开若提示"无法验证开发者"，右键 → 打开。
-`config.local.js` 里的 API key 只留在这台电脑的小服务器上，不会发到浏览器。
 
 **方式二：双击 `index.html`。** 不需要安装任何东西，但 Chrome 不会为本地文件记住麦克风权限，所以**每次按 Speak 都会询问**；不用麦克风时完全没影响。
 
-两种方式都不需要网络。没有 API key 时右上角显示 "Demo mode"，
-用离线关键词规则代替 AI，可以完整走完全部流程。
+两种方式都不需要网络，也不需要 API key：Pip 用离线规则回答，可以完整走完全部流程。
 
 推荐浏览器：Chrome / Edge / Safari 最新版。电脑和平板（触屏）都可以，全程只用鼠标点击或触屏点按，不用方向键。
 
@@ -44,7 +42,7 @@ INT4099 小组展示用的可运行原型。对象是香港小五、小六学生
 
 **"Go straight" 规则：** 只说 "go straight" 时 Pip 会一直走到这条路的尽头，不在岔路口停。想让 Pip 中途停下，要说清楚停在哪里：`go straight until the well`、`go straight 2 steps`、`turn left at the well`。Pip 只能沿直线走，不会自己拐弯找路；要去不在正前方的地标，需要学生一步步指挥。
 
-**最后一关（大学站）：** 分两段。第一段从车站去 library，找到书 *Cute Gordon*。第二段从 library 赶回车站，地图右上角有倒计时 "Train leaves in 4:00"（Simple 难度 5:00）。倒计时只在轮到学生说话时走；Pip 说话、走路、等 AI、弹出卡片、切走页面时都暂停，所以网速和打字动画不扣时间。最后 30 秒变红闪烁。时间到了火车开走（"The train has gone!"），不算失败：Pip 回到 library 重来，每次多给 1 分钟。老师视图记录 "Trains missed"，CSV 多一列 trains_missed。回程时 Pip 往南走会面朝学生，所以会练到 "My left or your left?"。调试链接 `?debug=guide&route=3&train=20` 把倒计时设成 20 秒。
+**最后一关（大学站）：** 分两段。第一段从车站去 library，找到书 *Cute Gordon*。第二段从 library 赶回车站，地图右上角有倒计时 "Train leaves in 4:00"（Simple 难度 5:00）。倒计时只在轮到学生说话时走；Pip 说话、走路、弹出卡片、切走页面时都暂停，所以打字动画不扣时间。最后 30 秒变红闪烁。时间到了火车开走（"The train has gone!"），不算失败：Pip 回到 library 重来，每次多给 1 分钟。老师视图记录 "Trains missed"，CSV 多一列 trains_missed。回程时 Pip 往南走会面朝学生，所以会练到 "My left or your left?"。调试链接 `?debug=guide&route=3&train=20` 把倒计时设成 20 秒。
 
 **左右规则：** left / right 指 Pip 自己的左右。热身题里 Pip 总是背对学生走（学生的左 = Pip 的左），不会出现歧义。
 Guide 阶段 Pip 面朝学生时，第一次说 left/right 会反问 "My left or your left?"；Pip 记住学生的回答，这条路线里不再追问，也不会悄悄换成另一种理解。
@@ -82,27 +80,11 @@ Guide 阶段 Pip 面朝学生时，第一次说 left/right 会反问 "My left or
 按 **Speak** 后，按钮变成 **Stop**，旁边出现一个圆形倒计时，从 10 数到 0（最后 3 秒变红）。
 到 0 时自动停止；说完一句话后安静约 2 秒也会自动停止；随时可以按 Stop。听到的文字留在输入框里，学生检查后再按 Send。
 
-## 接入 DeepSeek（可选）
+## AI（已关闭）
 
-**一台电脑演示：**
-
-```bash
-cp config.example.js config.local.js     # config.local.js 已在 .gitignore 中，不会被提交
-# 编辑 config.local.js，填入 apiKey
-```
-
-型号默认 `deepseek-flash`，请以 DeepSeek 官方文档为准，在 `config.local.js` 的 `model` 中修改。
-超时 6 秒；AI 返回空内容、坏 JSON 或超时时 Pip 说 "Sorry, can you say that again?"，不计入学生错误；
-连续失败两次自动切回离线规则。
-
-**全班使用（key 不进浏览器）：**
-
-```bash
-DEEPSEEK_API_KEY=sk-... npm run serve      # 即 node server/proxy.js，零依赖；也可以把 key 写在 config.local.js，服务器会读取
-# 学生用浏览器打开 http://<老师电脑的 IP>:8787/
-```
-
-中转服务器只转发学生的句子和事实表，不含班号或任何个人信息，也不把请求写入磁盘或日志。
+这一版**不调用任何 AI**：Pip 的回答全部来自离线规则（`js/rules.js`），不需要 API key，也不需要网络，界面上没有任何 AI 相关的内容。
+DeepSeek 的接入代码还保留在 `js/ai.js`（以及中转服务器 `server/proxy.js`），由一个总开关关掉：`js/ai.js` 里的 `ai.ENABLED = false`。
+以后要重新启用：把它改成 `true`，再按 `config.example.js` 开头的说明配置 key（key 只放在 git 忽略的 `config.local.js`，用 `start-mac.command` / `server/proxy.js` 中转，不要放进仓库或网页）。
 
 ## Pip 的声音（离线女声）
 
@@ -122,10 +104,10 @@ DEEPSEEK_API_KEY=sk-... npm run serve      # 即 node server/proxy.js，零依�
 ```bash
 npm install                 # 只安装开发用的 Playwright
 npx playwright install chromium
-npm test                    # 107 个单元测试（规则、迷宫、随机内容 360 个局号、提示、日志、AI 接口、语音输入、中转服务器）
+npm test                    # 109 个单元测试（规则、迷宫、随机内容 360 个局号、提示、日志、AI 接口、语音输入、中转服务器）
 npm run test:fit            # 13 个画面 × 7 种屏幕尺寸（手机横竖屏、平板、电脑）的排版检查
 npm run test:e2e            # 断网的无头浏览器完整通关，共约 300 项检查（随局号略有不同）：两名学生（内容不同）、两种难度、刷新后同一班号内容不变、
-                            # 只照第 2 级提示打字走完四条路线、赶火车倒计时（错过一班再重来）、图例、10 秒倒计时（模拟麦克风）、老师视图、坏 AI
+                            # 只照第 2 级提示打字走完四条路线、赶火车倒计时（错过一班再重来）、图例、10 秒倒计时（模拟麦克风）、老师视图、AI 关闭时不发任何请求
 ```
 
 **选关（测试用）：** 老师视图里点 "Levels (testing)"，或直接打开 `index.html?levels=1`，可以跳到任意一关（热身、Ask/Go 1–4、两个迷宫、大学站两段、Review、老师视图）。跳关后顶栏有 "Levels" 和 "Skip ▶"（跳到下一关）。可选 Fast（无打字动画和语音）、同一局内容、20 秒短倒计时。测试局只存在内存里，不影响学生的存档。
@@ -146,10 +128,10 @@ npm run test:e2e            # 断网的无头浏览器完整通关，共约 300 
 | 每条日志带学生标记，证据分开 | ✅（单人版：按班号） | e2e：两名学生两行，JSON 每条记录有 class_no |
 | 断网时离线模式可完整走完四件物品和两条路线 | ✅ | e2e 全程屏蔽网络 |
 | 全程不需要键盘方向键 | ✅ | e2e 代码检查：无方向键处理 |
-| AI 返回空内容或坏格式时不卡死，可以重说 | ✅ | e2e 模拟空内容和坏 JSON |
+| AI 已关闭：即使配置了 key 也不调用模型 | ✅ | e2e + 单元测试 |
 | 前端代码和仓库里搜不到 API key | ✅ | key 只在 git 忽略的 config.local.js 或服务器环境变量 |
 
-未覆盖：真实 DeepSeek 接口没有联网测试（没有 key）；接口按 OpenAI 兼容格式实现，单元测试用模拟响应覆盖。
+AI 接入代码（已关闭）由单元测试用模拟响应覆盖，没有用真实 DeepSeek 接口测试过。
 
 ## 目录
 
