@@ -5,6 +5,6 @@
  * there config.local.js / server/proxy.js decide.
  */
 (function () {
-  var RELAY = '';   /* e.g. 'https://muze-ai.<your-name>.workers.dev/api/chat' */
+  var RELAY = 'https://muze-ai.sleepypao-muze.workers.dev/api/chat';
   if (!window.MR_CONFIG && RELAY && window.location.hostname === 'sleepypao.github.io') window.MR_CONFIG = { proxyUrl: RELAY };
 })();
