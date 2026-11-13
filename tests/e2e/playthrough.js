@@ -687,6 +687,33 @@ async function playGame(page, classNo, difficulty, opts) {
   ok(errorsT.length === 0, 'no page errors with the train clock' + (errorsT.length ? ': ' + errorsT.join(' | ') : ''));
   await pt.close();
 
+  /* ---------- level select for testing (js/levels.js) */
+  console.log('\n== level select');
+  const pl = await context.newPage();
+  const errorsL = [];
+  pl.on('pageerror', (e) => errorsL.push(e.message));
+  await pl.goto(URL + '?levels=1');
+  await pl.waitForSelector('#mr-levels');
+  ok(await pl.$$eval('#mr-levels [data-level]', (b) => b.length) === 16, 'level select lists all 16 levels: warm-up, Ask/Go 1-4, end of lesson 1, 4 routes, review, teacher');
+  await pl.check('#mr-levels-fast');
+  await pl.check('#mr-levels-train');
+  await pl.click('#mr-levels [data-level="guide3"]');
+  await pl.waitForSelector('.mr-train');
+  const lv = await pl.evaluate(() => ({ q: location.search, route: MR.state.currentRouteId(), saved: MR.storage.isMemory ? MR.storage.isMemory() : null }));
+  ok(lv.route === 'r4' && /train=20/.test(lv.q) && /fast=1/.test(lv.q), 'a click on "Back to the station" opens it straight away, with the short train clock: ' + lv.q);
+  const seed = await pl.evaluate(() => MR.state.sessionSeed());
+  await pl.click('#mr-levels-skipbar');
+  await pl.waitForSelector('.mr-review');
+  ok(await pl.evaluate((s) => MR.state.sessionSeed() === s && /fast=1/.test(location.search), seed), '"Skip" goes to the next level (review) with the same game and options');
+  await pl.click('#mr-levels-open');
+  ok(await pl.isVisible('#mr-levels [data-level="review"].is-here'), 'the level on screen is marked in the list');
+  await pl.click('#mr-levels-close');
+  ok(!(await pl.$('#mr-levels')), 'Close shuts the level select');
+  await pl.goto(URL + '?fast=1');
+  ok(!(await pl.$('#mr-levels-open')), 'a pupil\'s normal game has no level buttons');
+  ok(errorsL.length === 0, 'no page errors in the level select');
+  await pl.close();
+
   /* ---------- broken AI */
   console.log('\n== broken AI');
   const p2 = await context.newPage();

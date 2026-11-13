@@ -14,6 +14,8 @@
  *     &train=20             any: seconds on the train clock (route r4, back to University Station)
  *     &demo=1               review / teacher: fill the log with example evidence for three pupils
  *   ?memory=1               use volatile memory storage without seeding (tests)
+ *   ?levels=1               open the level select (js/levels.js) on the start page
+ * On every ?debug= page the top bar has "Levels" (pick any level) and "Skip" (the next level).
  */
 (function (root) {
   'use strict';
@@ -29,6 +31,7 @@
   MR.log.init();
   MR.state.init();
   MR.ui.init();
+  MR.levels.initTopbar();
 
   root.addEventListener('error', function (e) { if (root.console) root.console.error('[MR] error', e.message); });
 
@@ -148,6 +151,7 @@
     var dbg = q.get('debug');
     if (dbg && MR.screens.has(dbg)) debugStart(dbg);
     else MR.go('start');
+    if (q.get('levels') === '1') MR.levels.show();
   }
   if (root.document.readyState === 'loading') root.document.addEventListener('DOMContentLoaded', boot); else boot();
 })(typeof window !== 'undefined' ? window : globalThis);

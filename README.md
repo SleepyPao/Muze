@@ -128,6 +128,8 @@ npm run test:e2e            # 断网的无头浏览器完整通关，共约 300 
                             # 只照第 2 级提示打字走完四条路线、赶火车倒计时（错过一班再重来）、图例、10 秒倒计时（模拟麦克风）、老师视图、坏 AI
 ```
 
+**选关（测试用）：** 老师视图里点 "Levels (testing)"，或直接打开 `index.html?levels=1`，可以跳到任意一关（热身、Ask/Go 1–4、两个迷宫、大学站两段、Review、老师视图）。跳关后顶栏有 "Levels" 和 "Skip ▶"（跳到下一关）。可选 Fast（无打字动画和语音）、同一局内容、20 秒短倒计时。测试局只存在内存里，不影响学生的存档。
+
 截图：`node tools/shot.js "?debug=guide&route=1&seed=2024" out.png`（`&seed=` 指定局号，可重现同一局）。所有调试链接见 docs/ARCHITECTURE.md。
 
 ## 验收清单（PLAN.md 第 10 节）

@@ -141,6 +141,8 @@ cover the input. `tests/e2e/fit.js` checks 11 screens x 7 sizes.
 | `?debug=guide&route=3&train=20` | University Station, back to the train, with a 20-second clock |
 | `?debug=review` / `?debug=teacher` | filled with example evidence for 3 pupils |
 
+`?levels=1` (or "Levels (testing)" in the teacher view) opens the level select (`js/levels.js`): every level is one of these links. On any `?debug=` page the top bar has "Levels" and "Skip ▶" (next level, same seed / difficulty / fast / train options).
+
 Other flags: `fast=1` (no typing effect, instant walking, no voice), `offline=1` (force Demo mode),
 `memory=1` (do not touch localStorage).
 

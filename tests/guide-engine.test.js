@@ -144,6 +144,22 @@ test('all eight maps (2 mazes + University Station to the library and back, 2 le
   }
 });
 
+test('University Station, both ways: a plain "go straight" stops at the next corner of the way, never past it into a dead end', () => {
+  for (const r of ['r3', 'r4']) for (const d of data.DIFFICULTIES) {
+    const mz = data.guideMaze(r, d), run = guide.newRun(mz), path = maze.findPath(mz, mz.start, mz.exit);
+    let i = 0;
+    while (i < path.length - 1) {
+      const f = maze.facingBetween(path[i], path[i + 1]);
+      let j = i; while (j < path.length - 1 && maze.facingBetween(path[j], path[j + 1]) === f) j++;
+      run.facing = f;                                   /* the turn itself is tested elsewhere */
+      say(mz, run, 'go straight');
+      assert.deepEqual([run.x, run.y], [path[j].x, path[j].y], `${mz.id}: "go straight" facing ${f} from ${path[i].x},${path[i].y}`);
+      i = j;
+    }
+    assert.ok(run.finished, mz.id);
+  }
+});
+
 test('left / right rule: Pip remembers the answer for the rest of the route and never switches meaning', () => {
   const mz = data.guideMaze('r2', 'standard');
   for (const [answer, expectFacing] of [['my left', 'W'], ['your left', 'E']]) {

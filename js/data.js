@@ -616,7 +616,9 @@
 
   /* Pip has just come out of the station (it stands behind the start tile) and wants to go to the library.
    * Every landmark stands ABOVE a street, so nothing ever hides Pip. A corner comes at the end of each street, so
-   * "go straight" works, and "go straight until the bus stop" names the same corner in words. */
+   * "go straight" works, and "go straight until the bus stop" names the same corner in words. Pip walks this map both
+   * ways (r3 there, r4 back): a dead end only ever branches off the SIDE of a street (the lane below the tree), never
+   * straight on from a corner, or "go straight" would take Pip past the corner into it on the way back. */
   var CITY_LANDMARKS = [
     { type: 'station', x: 1, y: 7 }, { type: 'shop', x: 3, y: 7 }, { type: 'bus_stop', x: 5, y: 4 }, { type: 'tree', x: 7, y: 4 },
     { type: 'library', x: 13, y: 1 }, { type: 'fountain', x: 11, y: 1 },  /* the fountain: what Pip sees first on the way back */
@@ -631,9 +633,9 @@
         '#########.....#',
         '#########.#####',
         '#########.#####',
-        '###.......#####',
-        '#####.###.#####',
-        '#####.###.#####',
+        '#####.....#####',
+        '#####.#.#######',
+        '#####.#.#######',
         '#.....#########',
         '###############',
         '###############'
