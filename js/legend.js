@@ -23,7 +23,7 @@
     (map.landmarks || []).forEach(function (lm) { have[lm.type] = true; });
     var order = (MR.data.landmarkIds || []).concat(Object.keys(have).filter(function (t) { return (MR.data.landmarkIds || []).indexOf(t) < 0; }));
     var out = order.filter(function (t) { return have[t]; });
-    if (map.exit && o.showExit !== false) out.push('exit');
+    if (map.exit && o.showExit !== false && !map.noGate) out.push('exit');
     return out;
   };
   function spotsOf(map, type) {

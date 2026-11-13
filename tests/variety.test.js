@@ -301,6 +301,7 @@ test(`fuzz ${SEEDS.length} seeds: Guide variants (mirrored / landmarks moved) ar
     for (const r of data.routeIds) {
       for (const d of data.DIFFICULTIES) {
         const mz = data.guideMaze(r, d), base = data.guideMazes[r][d], tag = `seed ${seed} ${mz.id}`;
+        if (base.fixed) { assert.equal(mz, base, 'the real-world route is the same in every game'); assert.ok(maze.minInstructions(mz) >= 5); continue; }
         assert.match(mz.id, new RegExp('^' + base.id + '~m[01]~p[0-5]+$'));
         assert.equal(mz.routeId, r); assert.equal(mz.difficulty, d);
         assert.equal(data.guideMazeById(mz.id), mz, `${tag}: guideMazeById round-trips`);
@@ -325,10 +326,11 @@ test(`fuzz ${SEEDS.length} seeds: Guide variants (mirrored / landmarks moved) ar
   assert.ok(mirrors.has(true) && mirrors.has(false), 'some mazes are mirrored, some are not');
   assert.ok(ids.size > 300, `${ids.size} different maze variants`);
   // ids that are not real mazes
-  for (const bad of ['', 'r3_standard', 'r1_hard', 'r1_standard~m2~p01234', 'r1_standard~m1~p0123', 'r1_standard~m1~p00123', 'r1_standard~m1~p91234', null]) {
+  for (const bad of ['', 'r4_standard', 'r1_hard', 'r1_standard~m2~p01234', 'r1_standard~m1~p0123', 'r1_standard~m1~p00123', 'r1_standard~m1~p91234', null]) {
     assert.equal(data.guideMazeById(bad), null, String(bad));
   }
   assert.equal(data.guideMazeById('r2_simple'), data.guideMazes.r2.simple);
+  assert.equal(data.guideMazeById('r3_standard'), data.guideMazes.r3.standard, 'the street map has no variants');
 });
 
 /* A tall landmark (tree, windmill, scarecrow) is drawn up over the tile above it: if Pip can walk there he is hidden.
@@ -389,7 +391,7 @@ test(`fuzz ${SEEDS.length} seeds: Pip is never hidden behind a landmark on ANY w
     for (let seed = 1000; seed < 1400; seed++) { data.useSession(seed); const mz = data.guideMaze(r, d); checkPipVisible(mz, mz.id); all++; }
   }
   data.useSession(null);
-  assert.ok(variants === SEEDS.length * 4 && all === 1600);
+  assert.ok(variants === SEEDS.length * 6 && all === 2400);
 });
 
 test(`fuzz ${SEEDS.length} seeds: the four things of one game never have colours a child could mix up; no two landmarks of one map look alike`, () => {

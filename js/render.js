@@ -69,7 +69,51 @@
       px(g, ox + mx, oy + my + 2, 2, 2, '#f3e6c4'); px(g, ox + mx - 1, oy + my, 4, 2, '#e04848'); px(g, ox + mx, oy + my, 1, 1, '#ffffff');
     }
   }
+  /* city theme (the real-world route): grey pavement, the walls are blocks of buildings */
+  function drawPavement(g, x, y, ox, oy, map) {
+    px(g, ox, oy, T, T, '#c9ccd1');
+    for (var i = 0; i < 2; i++) for (var j = 0; j < 2; j++) {
+      px(g, ox + 1 + i * 8, oy + 1 + j * 8, 7, 7, hash(x * 2 + i, y * 2 + j, 31) < 0.5 ? '#dfe2e6' : '#d6d9de');
+    }
+    if (maze.tileAt(map, x, y - 1) !== '.') px(g, ox, oy, T, 1, '#9aa0a8');
+    if (maze.tileAt(map, x - 1, y) !== '.') px(g, ox, oy, 1, T, '#9aa0a8');
+  }
+  var ROOFS = ['#b9785a', '#8d99ae', '#c7a16b', '#7f9c8a'];
+  /* city: every tile that is not a street and has no landmark on it is part of a building block */
+  function hasLandmark(map, x, y) { return (map.landmarks || []).some(function (l) { return l.x === x && l.y === y; }); }
+  function isBlock(map, x, y) {
+    var c = maze.tileAt(map, x, y);
+    return c === '#' || (c === ',' && !hasLandmark(map, x, y));
+  }
+  function drawRoof(g, x, y, ox, oy, map) {
+    var roof = ROOFS[Math.floor(hash(Math.floor(x / 3), Math.floor(y / 2), 77) * ROOFS.length)];
+    px(g, ox, oy, T, T, roof);
+    px(g, ox + 2 + Math.floor(hash(x, y, 81) * 9), oy + 3 + Math.floor(hash(x, y, 82) * 8), 3, 2, 'rgba(0,0,0,0.12)');
+    if (!isBlock(map, x, y - 1)) px(g, ox, oy, T, 1, '#3a2830');
+    if (!isBlock(map, x - 1, y)) px(g, ox, oy, 1, T, '#3a2830');
+    if (!isBlock(map, x + 1, y)) px(g, ox + T - 1, oy, 1, T, '#3a2830');
+  }
+  function drawPlaza(g, x, y, ox, oy) {          /* the square in front of a station, shop, library ... */
+    px(g, ox, oy, T, T, '#d8d2c4');
+    for (var i = 0; i < 4; i++) px(g, ox + (i % 2) * 8, oy + Math.floor(i / 2) * 8, 7, 7, hash(x, y, 90 + i) < 0.5 ? '#e6e0d2' : '#ded8ca');
+  }
+  function drawBuilding(g, map, x, y, ox, oy) {
+    var below = !isBlock(map, x, y + 1) || y + 1 >= map.rows;
+    var lift = 4, top = oy - lift;
+    var roof = ROOFS[Math.floor(hash(Math.floor(x / 3), Math.floor(y / 2), 77) * ROOFS.length)];
+    px(g, ox, top, T, T, roof);
+    px(g, ox, top, T, 1, 'rgba(255,255,255,0.25)'); px(g, ox + 3, top + 4, 4, 3, 'rgba(0,0,0,0.12)'); px(g, ox + 10, top + 9, 3, 3, 'rgba(255,255,255,0.18)');
+    if (!isBlock(map, x, y - 1)) px(g, ox, top, T, 1, '#3a2830');
+    if (!isBlock(map, x - 1, y)) px(g, ox, top, 1, T, '#3a2830');
+    if (!isBlock(map, x + 1, y)) px(g, ox + T - 1, top, 1, T, '#3a2830');
+    if (below && y + 1 < map.rows) {                       /* the front wall with two windows */
+      px(g, ox, oy + T - lift - 1, T, lift + 1, '#efe9dc'); px(g, ox, oy + T - lift - 1, T, 1, '#3a2830');
+      px(g, ox + 3, oy + T - lift + 1, 3, 3, '#7fb7e6'); px(g, ox + 10, oy + T - lift + 1, 3, 3, '#7fb7e6');
+      px(g, ox, oy + T - 1, T, 1, 'rgba(0,0,0,0.3)');
+    }
+  }
   function drawPath(g, x, y, ox, oy, map) {
+    if (map.theme === 'city') return drawPavement(g, x, y, ox, oy, map);
     px(g, ox, oy, T, T, '#d9c08c');
     /* flagstones: 2 x 2 stones with a little jitter */
     var stones = [[1, 1, 6, 6], [9, 1, 6, 6], [1, 9, 6, 6], [9, 9, 6, 6]];
@@ -99,6 +143,7 @@
   /* hedge: the top face is lifted 4 px (height), a darker front face shows when the tile below is open */
   var HEDGE_LIFT = 4;
   function drawHedge(g, map, x, y, ox, oy) {
+    if (map.theme === 'city') return drawBuilding(g, map, x, y, ox, oy);
     var below = maze.tileAt(map, x, y + 1) !== '#' || y + 1 >= map.rows;
     var top = oy - HEDGE_LIFT;
     px(g, ox, top, T, T, '#3f9a4a');
@@ -134,6 +179,7 @@
         var ch = maze.tileAt(map, x, y), ox = x * T, oy = PAD + y * T;
         if (ch === '.') drawPath(g, x, y, ox, oy, map);
         else if (ch === '~') drawWater(g, ox, oy);
+        else if (map.theme === 'city') { if (hasLandmark(map, x, y)) drawPlaza(g, x, y, ox, oy); else drawRoof(g, x, y, ox, oy, map); }
         else drawGrass(g, x, y, ox, oy);
       }
     }
@@ -163,6 +209,7 @@
   /* ------------------------------------------------------------------ scene */
   render.createScene = function (container, map, opts) {
     opts = opts || {};
+    if (map.noGate) { var o2 = {}; for (var k0 in opts) o2[k0] = opts[k0]; o2.showExit = false; opts = o2; }   /* the goal is a real place, not the garden gate */
     /* only as much top padding as the tallest sprite in the first rows needs */
     var PAD = 2;
     (map.landmarks || []).forEach(function (lm) {
@@ -457,7 +504,7 @@
       for (var y = 0; y < map.rows; y++) for (var x = 0; x < map.cols; x++) {
         var ch = maze.tileAt(map, x, y);
         if (ch === '~') { px(g, x * T + ((wf * 3 + y) % 12) + 1, PAD + y * T + 6, 3, 1, '#9fd4ff'); px(g, x * T + ((wf * 5 + 7) % 12), PAD + y * T + 11, 2, 1, '#cfe9ff'); }
-        else if (ch === ',' && hash(x, y, 90) < 0.35) {
+        else if (ch === ',' && map.theme !== 'city' && hash(x, y, 90) < 0.35) {
           var sway = Math.sin(now / 600 + x * 0.7 + y) > 0 ? 1 : 0;
           var gx = x * T + 3 + Math.floor(hash(x, y, 91) * 10), gy = PAD + y * T + 4 + Math.floor(hash(x, y, 92) * 8);
           px(g, gx + sway, gy, 1, 1, '#5aa83e'); px(g, gx, gy + 1, 1, 2, '#5aa83e'); px(g, gx + 2 - sway, gy + 1, 1, 1, '#5aa83e'); px(g, gx + 2, gy + 2, 1, 1, '#5aa83e');

@@ -50,6 +50,9 @@ test('request: DeepSeek chat shape, json mode, prompts mention json; no class nu
   assert.equal(c.init.headers.Authorization, 'Bearer test-key-not-real');
   assert.equal(c.body.model, 'deepseek-flash');
   assert.deepEqual(c.body.response_format, { type: 'json_object' });
+  assert.deepEqual(c.body.thinking, { type: 'disabled' }, 'deepseek-flash thinks by default: switched off for speed');
+  assert.equal(c.body.stream, false);
+  assert.equal(c.url, 'https://api.deepseek.com/chat/completions');
   assert.ok(c.body.temperature <= 0.3);
   assert.ok(c.body.max_tokens >= 200);
   assert.match(c.body.messages[0].content, /json/);

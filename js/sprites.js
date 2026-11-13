@@ -493,6 +493,59 @@
     px(g, 0, 0, 1, 20, '#b07c3c'); px(g, 15, 0, 1, 20, '#b07c3c');
     return { canvas: c, ox: 0, oy: -4 };
   };
+  /* ---- real-world places (original pixel art; no real logos or signs are copied) ---- */
+  LM.station = function () {
+    var c = canvas(24, 32), g = c.getContext('2d');
+    ellipse(g, 12, 30, 11, 2, 'rgba(0,0,0,0.2)');
+    px(g, 1, 10, 22, 20, PAL.k); px(g, 2, 11, 20, 18, '#e8e4dc'); px(g, 2, 26, 20, 3, '#c9c3b6');
+    px(g, 0, 6, 24, 6, PAL.k); px(g, 1, 7, 22, 4, '#b8323a'); px(g, 1, 10, 22, 1, '#8a2430');
+    /* a round sign with a little train on a pole */
+    px(g, 11, 0, 2, 7, PAL.k); ellipse(g, 12, 3, 4, 3, PAL.k); ellipse(g, 12, 3, 3, 2, '#ffffff');
+    px(g, 10, 2, 4, 2, '#3d7ad6'); px(g, 10, 4, 1, 1, PAL.k); px(g, 13, 4, 1, 1, PAL.k);
+    /* wide entrance + ticket gates */
+    px(g, 5, 15, 14, 14, PAL.k); px(g, 6, 16, 12, 13, '#4a5568');
+    px(g, 8, 22, 2, 7, '#c8d0d8'); px(g, 11, 22, 2, 7, '#c8d0d8'); px(g, 14, 22, 2, 7, '#c8d0d8');
+    px(g, 6, 16, 12, 2, '#ffd84a');
+    return { canvas: c, ox: -4, oy: -16 };
+  };
+  LM.bus_stop = function () {
+    var c = canvas(14, 28), g = c.getContext('2d');
+    ellipse(g, 7, 26, 6, 1, 'rgba(0,0,0,0.2)');
+    px(g, 6, 8, 2, 19, PAL.k); px(g, 6, 9, 1, 17, '#9aa3ad');
+    px(g, 1, 0, 12, 10, PAL.k); px(g, 2, 1, 10, 8, '#ffd84a');
+    /* a little bus on the sign */
+    px(g, 3, 3, 8, 4, '#e04848'); px(g, 4, 4, 2, 1, '#cfe9ff'); px(g, 7, 4, 3, 1, '#cfe9ff'); px(g, 4, 7, 1, 1, PAL.k); px(g, 9, 7, 1, 1, PAL.k);
+    px(g, 3, 25, 8, 2, PAL.k);
+    return { canvas: c, ox: 1, oy: -12 };
+  };
+  LM.shop = function () {
+    var c = canvas(22, 28), g = c.getContext('2d');
+    ellipse(g, 11, 26, 10, 2, 'rgba(0,0,0,0.2)');
+    px(g, 1, 4, 20, 22, PAL.k); px(g, 2, 5, 18, 20, '#f3e6c4');
+    /* striped awning */
+    px(g, 0, 8, 22, 6, PAL.k);
+    for (var i = 0; i < 5; i++) { px(g, 1 + i * 4, 9, 2, 4, '#3fae5a'); px(g, 3 + i * 4, 9, 2, 4, '#ffffff'); }
+    px(g, 2, 5, 18, 2, '#3fae5a');
+    /* window with goods + door */
+    px(g, 3, 15, 9, 8, PAL.k); px(g, 4, 16, 7, 6, '#cfe9ff'); px(g, 5, 19, 2, 3, '#e04848'); px(g, 8, 18, 2, 4, '#ffd84a');
+    px(g, 14, 15, 5, 10, PAL.k); px(g, 15, 16, 3, 9, '#8a5a32'); px(g, 15, 20, 1, 1, PAL.y);
+    return { canvas: c, ox: -3, oy: -12 };
+  };
+  LM.library = function () {
+    var c = canvas(26, 34), g = c.getContext('2d');
+    ellipse(g, 13, 32, 12, 2, 'rgba(0,0,0,0.2)');
+    /* roof (a wide triangle) */
+    for (var y = 0; y < 7; y++) { px(g, 12 - y * 2, 2 + y, 2 + y * 4, 1, PAL.k); if (y) px(g, 13 - y * 2 + 1, 2 + y, y * 4 - 2, 1, '#3d5a9e'); }
+    px(g, 0, 9, 26, 3, PAL.k); px(g, 1, 10, 24, 1, '#c8d0d8');
+    px(g, 1, 12, 24, 19, PAL.k); px(g, 2, 13, 22, 17, '#f3ecd8');
+    /* columns */
+    for (var i = 0; i < 4; i++) { px(g, 3 + i * 6, 13, 2, 17, '#c8d0d8'); px(g, 4 + i * 6, 13, 1, 17, '#9aa3ad'); }
+    /* door + an open book above it */
+    px(g, 10, 20, 6, 11, PAL.k); px(g, 11, 21, 4, 10, '#8a5a32');
+    px(g, 9, 14, 8, 5, PAL.k); px(g, 10, 15, 3, 3, '#ffffff'); px(g, 13, 15, 3, 3, '#ffffff'); px(g, 12, 15, 2, 3, '#d2463c');
+    px(g, 0, 30, 26, 2, PAL.k); px(g, 1, 30, 24, 1, '#c8d0d8');
+    return { canvas: c, ox: -5, oy: -18 };
+  };
   LM.exit = function (frame) {
     var c = canvas(18, 30), g = c.getContext('2d');
     var glow = frame % 4;

@@ -24,7 +24,12 @@
     windmill:   { name: 'windmill',      solid: true,  words: ['windmill', 'mill'] },
     scarecrow:  { name: 'scarecrow',     solid: true,  words: ['scarecrow'] },
     well:       { name: 'well',          solid: true,  words: ['well'] },
-    bench:      { name: 'bench',         solid: true,  words: ['bench', 'seat'] }
+    bench:      { name: 'bench',         solid: true,  words: ['bench', 'seat'] },
+    /* real-world places (the University Station route only; never shuffled into the mazes) */
+    station:    { name: 'station',       solid: true,  words: ['station', 'mtr station', 'mtr', 'train station', 'university station'] },
+    bus_stop:   { name: 'bus stop',      solid: true,  words: ['bus stop'] },
+    shop:       { name: 'shop',          solid: true,  words: ['shop', 'store'] },
+    library:    { name: 'library',       solid: true,  words: ['library'] }
   };
   data.landmarkIds = Object.keys(data.landmarkTypes);
   data.landmarkIds.forEach(function (id) { data.landmarkTypes[id].phrase = 'the ' + data.landmarkTypes[id].name; });
@@ -110,7 +115,8 @@
   data.SPRITE_BOX = {
     fountain: [-2, -7, 17, 14], tree: [-6, -16, 22, 15], bridge: [0, -4, 15, 15], red_door: [-2, -14, 17, 17],
     green_door: [-2, -14, 17, 17], windmill: [-7, -25, 23, 14], scarecrow: [-3, -14, 18, 15], well: [-1, -10, 17, 14],
-    bench: [0, 3, 15, 14], exit: [-1, -14, 16, 15]
+    bench: [0, 3, 15, 14], exit: [-1, -14, 16, 15],
+    station: [-4, -16, 19, 15], bus_stop: [1, -12, 14, 15], shop: [-3, -12, 18, 15], library: [-5, -18, 20, 15]
   };
   /** At most this part of Pip's picture may be behind a landmark. The low ones (fountain, well, bench) hide his
    *  feet at most (the well: 8 of his 20 rows = 0.4); a scarecrow just below him would hide 0.6, a tree or windmill more. */
@@ -498,7 +504,11 @@
 
   /* ------------------------------------------------------------------ Guide mazes: 2 routes x 2 difficulties */
   function gm(def) { def.kind = 'guide'; return maze.prepare(def); }
-  data.routeIds = ['r1', 'r2'];
+  data.routeIds = ['r1', 'r2', 'r3'];
+  /** r3 is the real-world route: a simple street map near an MTR station. It is the same for every game
+   *  (`fixed`), drawn as streets and buildings (`theme: 'city'`), and Pip's goal is a real place (the library)
+   *  instead of the garden gate (`noGate`: the exit tile is the tile in front of the library). */
+  data.ROUTE_TITLES = { r1: 'Way out 1', r2: 'Way out 2', r3: 'University Station' };
   data.DIFFICULTIES = ['standard', 'simple'];
   data.guideMazes = {
     r1: {
@@ -594,6 +604,52 @@
     }
   };
 
+  /* Pip has just come out of the station (it stands behind the start tile) and wants to go to the library.
+   * Every landmark stands ABOVE a street, so nothing ever hides Pip. A corner comes at the end of each street, so
+   * "go straight" works, and "go straight until the bus stop" names the same corner in words. */
+  var CITY_LANDMARKS = [
+    { type: 'station', x: 1, y: 7 }, { type: 'shop', x: 3, y: 7 }, { type: 'bus_stop', x: 5, y: 4 }, { type: 'tree', x: 7, y: 4 },
+    { type: 'library', x: 13, y: 1 }
+  ];
+  data.guideMazes.r3 = {
+    standard: gm({
+      id: 'r3_standard', routeId: 'r3', difficulty: 'standard', fixed: true, theme: 'city', noGate: true, goal: 'library',
+      tiles: [
+        '###############',
+        '###############',
+        '#########.....#',
+        '#########.#####',
+        '#########.#####',
+        '###.......#####',
+        '#####.###.#####',
+        '#####.###.#####',
+        '#.....#########',
+        '###############',
+        '###############'
+      ],
+      landmarks: CITY_LANDMARKS.concat([{ type: 'bench', x: 8, y: 7 }]),
+      start: { x: 1, y: 8, facing: 'E' }, exit: { x: 13, y: 2 }
+    }),
+    simple: gm({
+      id: 'r3_simple', routeId: 'r3', difficulty: 'simple', fixed: true, theme: 'city', noGate: true, goal: 'library',
+      tiles: [
+        '###############',
+        '###############',
+        '#########.....#',
+        '#########.#####',
+        '#########.#####',
+        '#####.....#####',
+        '#####.#########',
+        '#####.#########',
+        '#.....#########',
+        '###############',
+        '###############'
+      ],
+      landmarks: CITY_LANDMARKS.slice(),
+      start: { x: 1, y: 8, facing: 'E' }, exit: { x: 13, y: 2 }
+    })
+  };
+
   function baseGuideMaze(route, difficulty) {
     var id = typeof route === 'number' ? data.routeIds[route] : route;
     var r = data.guideMazes[id];
@@ -645,7 +701,7 @@
     var base = baseGuideMaze(route, difficulty);
     if (!base) return null;
     var v = current.guide && current.guide[base.routeId];
-    if (!v) return base;
+    if (!v || base.fixed) return base;
     /* the game's order of the six solid types, fitted to this maze so that no landmark can hide Pip (spotNeed) */
     var spots = base.landmarks.filter(function (lm) { return data.landmarkTypes[lm.type].solid; })
       .map(function (lm) { return { need: spotNeed(base.tiles, lm.x, lm.y) }; });
@@ -838,6 +894,8 @@
     deadEnd: 'Dead end. Go back and ask Pip again.',
     gotItem: 'I got it! Thank you!',
     guideOpen: 'I can’t see the way out. Tell me where to go!',
+    cityOpen: 'Now I am at University Station. Please help me get to the library!',
+    cityGoal: 'I am at the library! Thank you!',
     wall: 'There is a wall.',
     leftOrRight: 'Left or right?',
     whose: function (dir) { return 'My ' + dir + ' or your ' + dir + '?'; },
@@ -893,7 +951,8 @@
       items.push(b.item); goMaps[p.id] = b.map;
     });
     var guide = {};
-    data.routeIds.forEach(function (rid) { guide[rid] = { mirror: r.bool(), perm: r.shuffle([0, 1, 2, 3, 4, 5]) }; });
+    /* only the two mazes vary; the real-world route (r3) is fixed and uses no random numbers */
+    ['r1', 'r2'].forEach(function (rid) { guide[rid] = { mirror: r.bool(), perm: r.shuffle([0, 1, 2, 3, 4, 5]) }; });
     var content = { seed: seed, items: items, goMaps: goMaps, guide: guide, warmup: makeWarmup(r) };
     var keys = Object.keys(sessionCache);
     if (keys.length > 20) delete sessionCache[keys[0]];

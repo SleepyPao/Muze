@@ -4,7 +4,7 @@
  * no squashed or too-small buttons, the map fits its box, the dialog bar takes at most half the screen. */
 const { chromium } = require('playwright');
 const SIZES = [[360, 640], [390, 844], [640, 360], [844, 390], [768, 1024], [1024, 768], [1280, 800]];
-const SCREENS = ['start', 'warmup', 'ask&item=0', 'ask&item=1&facts=place', 'go&item=0', 'go&item=2', 'sessionbreak', 'guide&route=0', 'guide&route=1', 'review', 'teacher'];
+const SCREENS = ['start', 'warmup', 'ask&item=0', 'ask&item=1&facts=place', 'go&item=0', 'go&item=2', 'sessionbreak', 'guide&route=0', 'guide&route=1', 'guide&route=2', 'review', 'teacher'];
 (async () => {
   const b = await chromium.launch(); let bad = 0;
   for (const [w, h] of SIZES) {

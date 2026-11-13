@@ -33,7 +33,7 @@
     var saved = s.guide.routes[rid];
     var trail = saved && saved.trail && saved.trail.length > 1 ? saved.trail : (MR.guide.replay(entries)[rid] || { trail: [] }).trail;
     var box = el('div', { class: 'mr-scene-box mr-review__scene' });
-    var sc = MR.render.createScene(box, mz, { maxScale: 2, facingArrow: true, label: 'My way out ' + (ri + 1) });
+    var sc = MR.render.createScene(box, mz, { maxScale: 2, facingArrow: true, label: MR.data.ROUTE_TITLES[rid] || ('My way out ' + (ri + 1)) });
     scenes.push(sc);
     sc.setPip(mz.start.x, mz.start.y, mz.start.facing);
     sc.setTrail(trail);
@@ -49,7 +49,7 @@
     }, 'small');
     play.id = 'mr-review-play-' + rid;
     return el('div', { class: 'mr-card mr-review__route' }, [
-      el('h4', { class: 'mr-card__title', text: 'Way out ' + (ri + 1) + (saved && saved.reached ? ' ★' : '') }),
+      el('h4', { class: 'mr-card__title', text: (MR.data.ROUTE_TITLES[rid] || 'Way out ' + (ri + 1)) + (saved && saved.reached ? ' ★' : '') }),
       box, el('div', { class: 'mr-row' }, [play]), words
     ]);
   }

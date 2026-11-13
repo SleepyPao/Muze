@@ -9,7 +9,7 @@
   var log = MR.log = {};
   var db = null;        /* { device_id, seq, entries:[], locks:{}, rubric:{} } */
 
-  log.TOTALS = { facts: 12, junctions: 8, exits: 2 };   /* 4 things x 3 facts on each card */
+  log.TOTALS = { facts: 12, junctions: 8, exits: 3 };   /* exits: 2 maze routes + the University Station street map */   /* 4 things x 3 facts on each card */
   log.LEGACY_FACT = 'look';         /* the old "size and colour" fact of logs written before the seven kinds */
   log.GAP_CAP_MS = 3 * 60 * 1000;   /* idle gaps longer than this are not counted as working time */
 
@@ -295,7 +295,7 @@
   };
 
   /* ------------------------------------------------------------------ CSV */
-  log.CSV_COLUMNS = ['class_no', 'facts_asked_of_12', 'facts_assisted', 'junctions_first_correct_of_8', 'exits_reached_of_2',
+  log.CSV_COLUMNS = ['class_no', 'facts_asked_of_12', 'facts_assisted', 'junctions_first_correct_of_8', 'exits_reached_of_3',
     'clarifications', 'rewrites_ok', 'hints_used', 'ask_turns', 'go_attempts', 'guide_instructions', 'wall_hits',
     'time_min', 'warmup_correct', 'rubric_A_question_form', 'rubric_C_precision', 'rubric_C_repair', 'things_first_correct_of_4'];
   function cell(v) {

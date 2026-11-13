@@ -128,10 +128,11 @@ test('no question when Pip faces away from the viewer', () => {
   assert.equal(r.status, 'ok'); assert.equal(run.facing, 'W');
 });
 
-test('all four mazes are solvable through the engine with a scripted solution', () => {
+test('all six maps (2 mazes + the University Station street map, 2 levels each) are solvable with a scripted solution', () => {
   const scripts = {
     r1: ['go straight until the tree', 'turn right', 'go straight until the fountain', 'turn left', 'go straight until the windmill', 'turn right', 'go to the exit'],
-    r2: ['go straight until the bench', 'turn your right', 'go straight until the tree', 'turn left', 'go straight until the fountain', 'turn right', 'go to the exit']
+    r2: ['go straight until the bench', 'turn your right', 'go straight until the tree', 'turn left', 'go straight until the fountain', 'turn right', 'go to the exit'],
+    r3: ['go straight', 'turn left', 'go straight until the bus stop', 'turn right', 'go straight', 'turn left', 'go straight', 'turn right', 'go straight until the library']
   };
   for (const r of data.routeIds) for (const d of data.DIFFICULTIES) {
     const mz = data.guideMaze(r, d), run = guide.newRun(mz);

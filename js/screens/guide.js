@@ -23,7 +23,10 @@
       if (!rid) { MR.next(); return; }
       var mz = MR.data.guideMaze(rid, s.difficulty);
       var T = MR.data.text;
-      ui.topbar.setStage('Guide Pip · way out ' + (ri + 1) + ' of 2');
+      var city = !!mz.noGate;          /* the real-world route: University Station -> the library */
+      var nMaze = MR.data.routeIds.filter(function (id) { return !MR.data.guideMazes[id].standard.noGate; }).length;
+      var title = city ? 'University Station' : 'Way out ' + (ri + 1) + ' of ' + nMaze;
+      ui.topbar.setStage('Guide Pip · ' + (city ? 'University Station' : 'way out ' + (ri + 1) + ' of ' + nMaze));
 
       var box = el('div', { class: 'mr-scene-box mr-guide__scene' });
       var list = el('ol', { class: 'mr-guide__list' });
@@ -33,8 +36,8 @@
       var hintBox = el('div', { class: 'mr-hintbox mr-guide__hint', hidden: true, attrs: { 'aria-live': 'polite' } });
       var side = el('div', { class: 'mr-guide__side' }, [
         el('div', { class: 'mr-card mr-guide__task' }, [
-          el('div', { class: 'mr-guide__taskhead' }, [el('h3', { class: 'mr-card__title', text: 'Way out ' + (ri + 1) + ' of 2' }), restart]),
-          el('p', { text: 'Tell Pip how to get to the gate.' }),
+          el('div', { class: 'mr-guide__taskhead' }, [el('h3', { class: 'mr-card__title', text: title }), restart]),
+          el('p', { text: city ? 'Pip is at the station. Tell Pip how to get to the library.' : 'Tell Pip how to get to the gate.' }),
           el('p', { class: 'mr-guide__legend' }, [el('span', { class: 'mr-guide__arrow', text: '▲' }), ' shows where Pip is looking.'])
         ]),
         hintBox,
@@ -42,7 +45,7 @@
       ]);
       rootEl.appendChild(el('div', { class: 'mr-guide' }, [box, side]));
 
-      scene = MR.render.createScene(box, mz, { facingArrow: true, showExit: true, label: 'The maze with the way out' });
+      scene = MR.render.createScene(box, mz, { facingArrow: true, showExit: true, label: city ? 'A street map: University Station and the library' : 'The maze with the way out' });
       var sc = scene;
       side.insertBefore(MR.legend.create(mz, sc, { compact: true }), hintBox);
       var run, pending = null, ctx = {}, busy = false, hintLevel = 0;
@@ -111,7 +114,7 @@
         sc.emote('?', 1600);
         ui.dialog.say(T.whose(ctx.pendingDir), { emotion: 'confused' });       /* Pip was waiting for this answer */
       } else {
-        ui.dialog.say(ri === 0 ? T.guideOpen : 'Now the other way out. Help me again!', { emotion: 'neutral' });
+        ui.dialog.say(city ? T.cityOpen : (ri === 0 ? T.guideOpen : 'Now the other way out. Help me again!'), { emotion: 'neutral' });
       }
       ui.dialog.focus();
 
@@ -204,14 +207,17 @@
         sc.emote('heart', 2000);
         MR.audio.sfx('pickup');
         ui.dialog.setInputEnabled(false);
-        ui.dialog.say(T.exit, { emotion: 'happy' });
+        ui.dialog.say(city ? T.cityGoal : T.exit, { emotion: 'happy' });
         MR.state.finishRoute(rid, run);
         MR.log.lockStage('guide', rid);
         var more = !MR.state.allRoutesDone();
         return MR.util.wait(MR.flags.fast ? 0 : 1200).then(function () {
-          return ui.overlay.show({ title: 'Pip is out!', stars: 1, emotion: 'happy',
-            text: more ? 'Great directions! Now help Pip find the other way out.' : 'You found both ways out. Well done!',
-            button: more ? 'Next way out' : 'Next' });
+          var nextCity = more && MR.data.guideMazes[MR.data.routeIds[MR.state.get().guide.routeIndex]].standard.noGate;
+          return ui.overlay.show({ title: city ? 'Pip is at the library!' : 'Pip is out!', stars: 1, emotion: 'happy',
+            text: city ? 'You gave clear directions in a real place. Well done!' :
+              (nextCity ? 'Pip is out of the maze! Now help Pip in a real place: University Station.' :
+                (more ? 'Great directions! Now help Pip find the other way out.' : 'You found both ways out. Well done!')),
+            button: more ? (nextCity ? 'Go to the station' : 'Next way out') : 'Next' });
         }).then(function () { if (live()) MR.next(); });
       }
     },

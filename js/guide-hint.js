@@ -121,7 +121,7 @@
     else {
       parts.push(LOOK[run.facing]);
       maze.visibleAhead(mz, run, run.facing).forEach(function (v) {
-        if (seenType[v.type] || visible.length >= 3) return;
+        if (seenType[v.type] || visible.length >= 3 || (v.type === 'exit' && mz.noGate)) return;
         seenType[v.type] = true;
         var lm = findLandmark(mz, v.id);
         if (lm) visible.push({ id: lm.id, type: lm.type, x: lm.x, y: lm.y, name: guide.label(lm.type) });
@@ -183,7 +183,7 @@
       out.to = { x: m.to.x, y: m.to.y, facing: m.facing };
       var cands = [], seen = {};
       maze.visibleAhead(mz, run, run.facing).forEach(function (v) {
-        if (seen[v.type]) return; seen[v.type] = true;
+        if (seen[v.type] || (v.type === 'exit' && mz.noGate)) return; seen[v.type] = true;   /* a street map: name the place, not a gate */
         var lm = findLandmark(mz, v.id);
         cands.push({
           actions: [{ type: 'forward', until: v.type }],
@@ -191,8 +191,8 @@
           landmark: lm ? { id: lm.id, type: lm.type, x: lm.x, y: lm.y, name: guide.label(lm.type) } : null
         });
       });
+      cands.push({ actions: [{ type: 'forward' }], say: 'Go straight.' });     /* the simplest words that work come first */
       cands.push({ actions: [{ type: 'forward', steps: m.steps }], say: 'Go straight ' + m.steps + (m.steps === 1 ? ' step.' : ' steps.') });
-      cands.push({ actions: [{ type: 'forward' }], say: 'Go straight.' });
       for (var i = 0; i < cands.length; i++) {
         if (lands(simulate(mz, run, cands[i].actions, null), m.to.x, m.to.y, m.facing)) {
           out.say = cands[i].say; out.actions = cands[i].actions; out.landmark = cands[i].landmark || null;

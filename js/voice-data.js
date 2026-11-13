@@ -65,6 +65,10 @@ window.MR_VOICE = {
   "assets/voice/2a724debd5b9.mp3",
   2.43
  ],
+ "I am at the library! Thank you!": [
+  "assets/voice/4c9e84492ad3.mp3",
+  2.75
+ ],
  "I am here already.": [
   "assets/voice/d9b6d4daec34.mp3",
   1.57
@@ -97,6 +101,10 @@ window.MR_VOICE = {
   "assets/voice/c76d2db75ef0.mp3",
   2.89
  ],
+ "I can’t see a bus stop. What can I see?": [
+  "assets/voice/6eaa3f8aded4.mp3",
+  2.81
+ ],
  "I can’t see a door. What can I see?": [
   "assets/voice/471161f0dce6.mp3",
   2.61
@@ -105,6 +113,10 @@ window.MR_VOICE = {
   "assets/voice/b5b8ef28c807.mp3",
   3.09
  ],
+ "I can’t see a library. What can I see?": [
+  "assets/voice/f809af36ab41.mp3",
+  3.19
+ ],
  "I can’t see a red door. What can I see?": [
   "assets/voice/392b3cbb1a1c.mp3",
   2.79
@@ -112,6 +124,14 @@ window.MR_VOICE = {
  "I can’t see a scarecrow. What can I see?": [
   "assets/voice/e23dc873624c.mp3",
   2.96
+ ],
+ "I can’t see a shop. What can I see?": [
+  "assets/voice/d1f8c8e75871.mp3",
+  2.52
+ ],
+ "I can’t see a station. What can I see?": [
+  "assets/voice/0d97bdc79a3c.mp3",
+  2.89
  ],
  "I can’t see a way out. What can I see?": [
   "assets/voice/f9c93fdc5a14.mp3",
@@ -600,6 +620,10 @@ window.MR_VOICE = {
  "No, that is not it. Look at your card.": [
   "assets/voice/67dcebc9bec2.mp3",
   2.82
+ ],
+ "Now I am at University Station. Please help me get to the library!": [
+  "assets/voice/ffa0c9972513.mp3",
+  4.55
  ],
  "Now read your card again. Which path?": [
   "assets/voice/780272df30d0.mp3",

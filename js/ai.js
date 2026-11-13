@@ -46,7 +46,14 @@
     return 'offline';
   };
   ai.isOffline = function () { return ai.mode() === 'offline'; };
-  ai.status = function () { return { mode: ai.mode(), failures: failures, forcedOffline: forcedOffline }; };
+  var lastHttp = null;       /* HTTP status of the last model call (null = none yet, 0 = no answer / network) */
+  /** DeepSeek error codes (docs): what the teacher should do. */
+  ai.HTTP_HELP = { 0: 'no answer (network, CORS or time-out)', 400: 'bad request format', 401: 'wrong or missing API key', 402: 'no balance left on the DeepSeek account',
+    422: 'wrong request parameter (check the model name)', 429: 'too many requests at once', 500: 'DeepSeek server error', 503: 'DeepSeek server busy' };
+  ai.status = function () {
+    return { mode: ai.mode(), failures: failures, forcedOffline: forcedOffline, lastHttp: lastHttp,
+      lastHelp: lastHttp == null || lastHttp === 200 ? '' : (ai.HTTP_HELP[lastHttp] || 'HTTP ' + lastHttp) };
+  };
   /** Forget failures and try the model again (teacher action / tests). */
   ai.reset = function () { failures = 0; forcedOffline = false; MR.emit('ai:mode', ai.mode()); };
 
@@ -161,6 +168,9 @@
       response_format: { type: 'json_object' },
       temperature: c.temperature,
       max_tokens: c.maxTokens,
+      /* DeepSeek docs: deepseek-flash THINKS by default (slow, and temperature is ignored while thinking).
+       * Pip only classifies / parses, so thinking is switched off: fast answers inside the 6 s limit. */
+      thinking: { type: 'disabled' },
       stream: false
     });
     var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -171,7 +181,7 @@
     var request;
     try {
       request = Promise.resolve(f.call(root, url, { method: 'POST', headers: headers, body: body, signal: ctrl ? ctrl.signal : undefined }))
-        .then(function (resp) { return resp && resp.ok ? resp.json() : null; })
+        .then(function (resp) { lastHttp = resp ? (resp.status || 0) : 0; return resp && resp.ok ? resp.json() : null; })
         .then(function (json) {
           var content = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
           if (typeof content !== 'string' || !content.trim()) return null;

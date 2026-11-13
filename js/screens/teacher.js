@@ -126,7 +126,7 @@
     if (!rows.length) { body.appendChild(el('p', { class: 'mr-card', text: 'No pupil data on this device yet. Pupils play first, or use “Import JSON” to add data from other devices.' })); return; }
     var t = el('table', { class: 'mr-teach__table' });
     var head = [
-      ['Class no.', ''], ['Facts asked', '/12'], ['Assisted', 'facts'], ['Paths first try', '/8'], ['Right thing first try', '/4'], ['Exits', '/2'],
+      ['Class no.', ''], ['Facts asked', '/12'], ['Assisted', 'facts'], ['Paths first try', '/8'], ['Right thing first try', '/4'], ['Routes done', '/3'],
       ['Pip asked back', 'times'], ['Good rewrites', 'times'], ['A: Question form', '0–3'], ['C: Precision', '0–3'], ['C: Repair', '0–3'],
       ['Hints*', ''], ['Warm-up*', '/10'], ['Time*', ''], ['Tries*', 'paths / words'], ['', '']
     ];
@@ -210,7 +210,7 @@
       var bBack = ui.button('Back to start', function () { MR.go('start'); }, 'small');
       bJson.id = 'mr-export-json'; bImp.id = 'mr-import-json'; bCsv.id = 'mr-export-csv'; bClear.id = 'mr-clear'; bBack.id = 'mr-teacher-back';
       rootEl.appendChild(el('div', { class: 'mr-teach' }, [
-        el('div', { class: 'mr-teach__bar' }, [el('h2', { class: 'mr-h2', text: 'Teacher view' }), el('span', { class: 'mr-teach__mode', text: 'AI: ' + MR.ai.mode() }),
+        el('div', { class: 'mr-teach__bar' }, [el('h2', { class: 'mr-h2', text: 'Teacher view' }), el('span', { class: 'mr-teach__mode', text: 'AI: ' + MR.ai.mode() + (MR.ai.status().lastHelp ? ' — last call: ' + MR.ai.status().lastHelp : '') }),
           el('div', { class: 'mr-row mr-teach__btns' }, [bJson, bImp, bCsv, bAi, bClear, bBack])]),
         root.location.protocol === 'file:' ? el('p', { class: 'mr-teach__tip', text: 'Microphone tip: the game is open as a file, so Chrome asks for the microphone every time. ' +
           'Double-click start-mac.command (Mac) or start-windows.bat (Windows) instead: the game opens at http://localhost:8787/ and you can choose “Allow on every visit”.' }) : null,

@@ -116,7 +116,7 @@
   /* ------------------------------------------------------------ debug deeplinks */
   function debugStart(screen) {
     var item = Math.max(0, Math.min(3, parseInt(q.get('item') || '0', 10) || 0));
-    var route = Math.max(0, Math.min(1, parseInt(q.get('route') || '0', 10) || 0));
+    var route = Math.max(0, Math.min(MR.data.routeIds.length - 1, parseInt(q.get('route') || '0', 10) || 0));
     var diff = q.get('difficulty') === 'simple' ? 'simple' : 'standard';
     var seed = q.get('seed') != null && q.get('seed') !== '' && !isNaN(Number(q.get('seed'))) ? Number(q.get('seed')) >>> 0 : null;
     var base = { class_no: q.get('class') || '5A-01', difficulty: diff, warmup: true, seed: seed };

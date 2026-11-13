@@ -8,7 +8,7 @@
  * - Serves the game (static files from the repo root) on http://0.0.0.0:8787/
  * - POST /api/chat  -> forwards the chat request to DeepSeek with the key from the environment.
  *   The key never reaches a browser. The relay forwards only model / messages / response_format /
- *   temperature / max_tokens; it adds nothing about the pupil and writes no request bodies to disk or console.
+ *   temperature / max_tokens (+ thinking: disabled); it adds nothing about the pupil and writes no request bodies to disk or console.
  *   Only the game's own page may use it: the request must be JSON (Content-Type: application/json), come from
  *   this server's own origin, and name this computer in its Host header. Another web page cannot spend the key.
  * - GET /config.local.js is GENERATED here ({ proxyUrl: '/api/chat' }); a real config.local.js on disk is never served.
@@ -140,6 +140,7 @@ function cleanRequest(body) {
     response_format: { type: 'json_object' },
     temperature: temp >= 0 && temp <= 1 ? temp : 0.2,
     max_tokens: max >= 1 && max <= 800 ? Math.floor(max) : 400,
+    thinking: { type: 'disabled' },      /* deepseek-flash thinks by default: off = fast (DeepSeek API docs) */
     stream: false
   };
 }

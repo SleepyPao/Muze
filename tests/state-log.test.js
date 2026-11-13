@@ -42,7 +42,9 @@ test('state: flow Start -> Warm-up -> Ask/Go x4 -> break -> Guide x2 -> Review',
   S.finishRoute('r1', { instructions: 7, trail: [{ x: 1, y: 9 }] });
   assert.deepEqual(S.nextScreen(), { screen: 'guide', params: { route: 1 } });
   S.finishRoute('r2');
-  assert.equal(S.get().stars, 6);
+  assert.deepEqual(S.nextScreen(), { screen: 'guide', params: { route: 2 } });   /* the real-world route */
+  S.finishRoute('r3');
+  assert.equal(S.get().stars, 7);
   assert.equal(S.nextScreen().screen, 'review');
 });
 
@@ -199,7 +201,7 @@ test('log: per-pupil aggregation for the teacher view', () => {
   assert.equal(r.warmup_correct, 7);
   assert.equal(r.corrected_asr, 1);
   assert.equal(r.grammar_notes.length, 2);        // "single word" + "word order"
-  assert.deepEqual(MR.log.TOTALS, { facts: 12, junctions: 8, exits: 2 });
+  assert.deepEqual(MR.log.TOTALS, { facts: 12, junctions: 8, exits: 3 });
 });
 
 test('log: rubric A and C (0-3), CSV export', () => {

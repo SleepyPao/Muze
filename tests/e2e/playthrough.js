@@ -273,7 +273,7 @@ async function playGame(page, classNo, difficulty, opts) {
   await page.click('#mr-break-next');
 
   /* ---------- Guide x 2 */
-  for (let r = 0; r < 2; r++) {
+  for (let r = 0; r < 3; r++) {
     await page.waitForSelector('.mr-guide');
     if (r === 0 && !opts.followHints) {
       await checkLegend(page, 'Guide map');
@@ -395,14 +395,14 @@ async function playGame(page, classNo, difficulty, opts) {
     }
     if (plan.rid === 'r2') ok(whose, 'route 2 (Pip faces the pupil): "My left or your left?" asked and answered');
     await page.waitForSelector('#mr-overlay:not([hidden])', { timeout: 8000 });
-    ok(/Pip is out/.test(await page.textContent('#mr-overlay-title')), `route ${plan.rid}: exit reached`);
+    ok((plan.rid === 'r3' ? /Pip is at the library/ : /Pip is out/).test(await page.textContent('#mr-overlay-title')), `route ${plan.rid}: ${plan.rid === 'r3' ? 'Pip reached the library from University Station' : 'exit reached'}`);
     await page.click('#mr-overlay-btn');
   }
 
   /* ---------- Review */
   await page.waitForSelector('.mr-review');
   ok(await page.$$eval('.mr-bubble--me', (e) => e.length) >= 12, 'review shows the pupil\'s own questions');
-  ok(await page.$$eval('.mr-review__route canvas', (e) => e.length) === 2, 'review shows both routes');
+  ok(await page.$$eval('.mr-review__route canvas', (e) => e.length) === 3, 'review shows all three routes (2 mazes + University Station)');
   ok(await page.isDisabled('#mr-review-done'), 'self-assessment must be filled in first');
   for (const row of await page.$$('.mr-cando')) await (await row.$('.mr-cando__yes')).click();
   await page.click('#mr-review-done');
@@ -440,7 +440,7 @@ async function playGame(page, classNo, difficulty, opts) {
   await page.waitForSelector('.mr-teach__table');
   const rows = await page.$$eval('.mr-teach__row', (trs) => trs.map((tr) => Array.from(tr.children).map((td) => td.textContent.trim())));
   ok(rows.length === 2 && rows[0][0] === '5A-12' && rows[1][0] === '5A-13', 'one row per pupil, evidence kept apart');
-  ok(rows[0][1] === '12' && rows[0][3] === '7' && rows[0][4] === '3' && rows[0][5] === '2', '5A-12: facts 12/12, paths first try 7/8 (one dead end), right thing first try 3/4, exits 2/2');
+  ok(rows[0][1] === '12' && rows[0][3] === '7' && rows[0][4] === '3' && rows[0][5] === '3', '5A-12: facts 12/12, paths first try 7/8 (one dead end), right thing first try 3/4, routes 3/3');
   ok(rows[0][2] === '1', '5A-12: one assisted fact (after the level-2 hint)');
   ok(Number(rows[0][6]) >= 7 && Number(rows[0][7]) >= 1, '5A-12: clarifications and successful rewrites counted');
   await page.selectOption('.mr-teach__row:first-child select[data-field="A_question_form"]', '2');
@@ -448,7 +448,7 @@ async function playGame(page, classNo, difficulty, opts) {
   await page.selectOption('.mr-teach__row:first-child select[data-field="C_repair"]', '1');
   await page.click('.mr-teach__row:first-child .mr-btn');
   await page.waitForSelector('.mr-teach__log');
-  ok(await page.$$eval('.mr-teach__details canvas', (e) => e.length) === 2, 'teacher can open a pupil: full record + 2 route replays');
+  ok(await page.$$eval('.mr-teach__details canvas', (e) => e.length) === 3, 'teacher can open a pupil: full record + 3 route replays (2 mazes + University Station)');
   ok(/word order: Where is it\?/.test(await page.textContent('.mr-teach__notes')), 'grammar note for "Where it is?" visible to the teacher only');
   const tThings = await page.$$eval('.mr-teach__thing', (els) => els.map((e) => ({ id: e.dataset.item, slots: e.dataset.slots, text: e.textContent })));
   ok(tThings.length === 4 && tThings.every((t, i) => t.id === g1.facts[i].id && t.slots === g1.facts[i].slots.join(',') &&
@@ -458,11 +458,11 @@ async function playGame(page, classNo, difficulty, opts) {
   ok(/not on the card \(no fact\)/.test(logText), 'teacher record flags the questions that were not on the card');
   ok(/turn around/.test(logText) && /turn left \(pupil’s side\)/.test(logText) && /turn left \(Pip’s side\)/.test(logText) && !/turn left, turn left/.test(logText),
     'teacher record: "turn around" is one action; "my left" / "her left" are shown as the pupil\'s side / Pip\'s side');
-  const walk = await page.evaluate(() => { const rep = MR.guide.replay(MR.log.forStudent('5A-12')); return { r1: rep.r1.reached, r2: rep.r2.reached, n2: rep.r2.instructions, run2: rep.r2.run.instructions }; });
-  ok(walk.r1 && walk.r2 && walk.n2 > walk.run2, `teacher replay of 5A-12 ends at both exits; all ${walk.n2} lines of route 2 are counted, the last run had ${walk.run2}`);
+  const walk = await page.evaluate(() => { const rep = MR.guide.replay(MR.log.forStudent('5A-12')); return { r1: rep.r1.reached, r2: rep.r2.reached && rep.r3.reached, n2: rep.r2.instructions, run2: rep.r2.run.instructions }; });
+  ok(walk.r1 && walk.r2 && walk.n2 > walk.run2, `teacher replay of 5A-12 reaches the end of all three routes; all ${walk.n2} lines of route 2 are counted, the last run had ${walk.run2}`);
   let [dl] = await Promise.all([page.waitForEvent('download'), page.click('#mr-export-csv')]);
   const csv = fs.readFileSync(await dl.path(), 'utf8');
-  ok(/^﻿?class_no,/.test(csv) && /\n5A-12,12,1,7,2,/.test(csv) && /,2,3,1,3\r\n/.test(csv), 'class CSV export has the counts and rubric scores');
+  ok(/^﻿?class_no,/.test(csv) && /\n5A-12,12,1,7,3,/.test(csv) && /,2,3,1,3\r\n/.test(csv), 'class CSV export has the counts and rubric scores');
   [dl] = await Promise.all([page.waitForEvent('download'), page.click('#mr-export-json')]);
   const json = JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
   ok(json.app === 'maze-rescue' && json.entries.length > 50 && json.entries.every((e) => e.class_no && !('player' in e) && !('audio' in e)), 'JSON export: every record has class_no, no player field, no audio');
@@ -622,11 +622,11 @@ async function playGame(page, classNo, difficulty, opts) {
   await pp.waitForSelector('.mr-teach__table');
   const demo = await pp.evaluate(() => MR.log.classNos().map((c) => {
     const e = MR.log.forStudent(c), rep = MR.guide.replay(e);
-    return { c, r1: rep.r1.reached, r2: rep.r2.reached, around: e.some((x) => (x.parsed_actions || []).some((a) => a.dir === 'around')),
+    return { c, r1: rep.r1.reached, r2: rep.r2.reached && rep.r3.reached, around: e.some((x) => (x.parsed_actions || []).some((a) => a.dir === 'around')),
       twoLefts: e.some((x) => /around/.test(x.sent_text) && (x.parsed_actions || []).length !== 1), engine: e.filter((x) => x.stage === 'guide' && x.event === 'turn').every((x) => x.engine === MR.guide.ENGINE) };
   }));
   ok(demo.length === 3 && demo.every((d) => d.r1 && d.r2 && d.engine) && demo.some((d) => d.around) && !demo.some((d) => d.twoLefts),
-    'example evidence (teacher demo): all three pupils reach both exits under the current rules; "turn around" is one action');
+    'example evidence (teacher demo): all three pupils reach the end of all three routes under the current rules; "turn around" is one action');
   ok(errorsP.length === 0, 'no page errors in the picture checks');
 
   /* ---------- normal speed: the input stays off until Pip has said his note, so no sentence is lost */

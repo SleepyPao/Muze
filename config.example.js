@@ -16,7 +16,8 @@
 window.MR_CONFIG = {
   apiKey: '',                           // DeepSeek key, direct mode only (leave '' for Demo mode)
   baseUrl: 'https://api.deepseek.com',  // OpenAI-compatible base URL
-  model: 'deepseek-flash',              // model name - check the provider's documentation
+  model: 'deepseek-flash',              // DeepSeek model IDs (api-docs.deepseek.com, Nov 2026): 'deepseek-flash' (fast) or 'deepseek-v4-pro'.
+                                        // The game always sends thinking: disabled, so answers come back fast.
   proxyUrl: '',                         // e.g. '/api/chat' - when set, the key above is not used
   timeoutMs: 6000,                      // a slower answer counts as "Pip did not hear"
   temperature: 0.2,
